@@ -1,0 +1,63 @@
+# StoryEngine 브릿지 설정 예시.
+# 이 파일을 config.toml 로 복사해서 쓴다. config.toml 은 API 키가 들어가므로 커밋하지 않는다.
+
+[bridge]
+# 게임이 요청 파일을 쓰는 폴더. 비워두면 %USERPROFILE%\Zomboid\Lua\StoryEngine
+# 전용 서버를 -cachedir 로 띄웠다면 <cachedir>\Lua\StoryEngine 으로 지정한다.
+data_dir = ""
+poll_interval = 0.25        # 초. 요청 폴더 확인 주기
+heartbeat_interval = 2.0    # 초. 게임은 15초 동안 갱신이 없으면 연결 끊김으로 본다
+max_workers = 2             # 동시에 처리할 LLM 호출 수
+
+[limits]
+requests_per_hour = 120     # 0 이면 제한 없음. 넘으면 게임에 rate_limited 오류를 돌려준다
+
+[providers.mock]
+delay_seconds = 0.5         # 응답 지연 흉내
+
+[providers.anthropic]
+# api_key 를 비워두면 ANTHROPIC_API_KEY 환경 변수를 쓴다 (권장).
+api_key = ""
+timeout_seconds = 40
+max_retries = 1
+# claude-opus-5 요청이 안전 정책으로 거절되면 서버 측에서 다른 모델로 다시 실행한다.
+refusal_fallback = true
+
+[providers.openai]
+# api_key 를 비워두면 OPENAI_API_KEY 환경 변수를 쓴다 (권장).
+api_key = ""
+timeout_seconds = 40
+max_retries = 1
+
+# 모듈별 제공자와 모델. provider = "mock" | "anthropic" | "openai"
+# effort: anthropic 은 output_config.effort, openai 는 reasoning.effort 로 전달된다. 디렉터·일지 = 상위 모델, 독백 = 경량 모델.
+[modules.debug]
+provider = "mock"           # 실제 호출을 시험하려면 "anthropic"
+model = "claude-opus-5"
+max_tokens = 1024
+
+[modules.director]
+provider = "anthropic"
+model = "claude-opus-5"
+max_tokens = 16000
+
+[modules.radio]
+provider = "anthropic"
+model = "claude-opus-5"
+max_tokens = 16000
+
+[modules.journal]
+provider = "anthropic"
+model = "claude-opus-5"
+max_tokens = 16000
+
+[modules.monologue]
+provider = "anthropic"
+model = "claude-haiku-4-5"
+max_tokens = 1024
+
+# 스토리 로그 압축 (주간 요약, NPC 무전 기억). 없으면 journal 설정을 쓴다.
+[modules.summary]
+provider = "anthropic"
+model = "claude-haiku-4-5"
+max_tokens = 4000

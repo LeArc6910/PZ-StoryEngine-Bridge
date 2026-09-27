@@ -1,0 +1,6 @@
+# 개인 설정 (API 키가 들어갈 수 있음)
+config.toml
+bridge.log
+__pycache__/
+*.pyc
+.venv/

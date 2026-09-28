@@ -95,6 +95,65 @@ class JournalModuleTest(unittest.TestCase):
         self.assertIn("Their diary said: Quiet.", text)
         self.assertIn("third person", req.system)
 
+    def test_activities(self):
+        acts = {"craft": {"n": 3, "w": {"Craft Rope": 2, "Make Spear": 1}},
+                "dismantle": {"n": 4, "w": {"Dismantle Radio": 4}},
+                "fish": {"n": 2, "w": {"Bass": 2}},
+                "treat_other": {"n": 1, "w": {}},
+                "chop": {"n": 5, "w": []},
+                "bogus": {"n": 9, "w": {"x": 9}}}
+        ep = dict(DAILY["episodes"][0], acts=acts)
+        payload = dict(DAILY, episodes=[ep], summary=dict(DAILY["summary"], acts=acts))
+        text = self.build(payload).messages[0]["content"]
+        self.assertIn("did: crafted: Craft Rope x2, Make Spear; took apart for parts: Dismantle Radio x4; "
+                      "caught fish: Bass x2; treated another survivor's wounds; chopped at trees (5 times)", text)
+        self.assertIn("Work and chores today: crafted: Craft Rope x2", text)
+        self.assertNotIn("bogus", text)
+        # 빈 Lua 테이블은 [] 로 온다
+        empty = self.build(dict(DAILY, episodes=[dict(ep, acts=[])])).messages[0]["content"]
+        self.assertNotIn("did:", empty)
+
+    def test_death_note_and_comment(self):
+        notes = [{"kind": "death_of", "by": "Minsu Kim", "place": {"town": "Riverside", "townDist": 90}, "together": 185,
+                  "clock": "21:10"},
+                 {"kind": "death_of", "by": "Tia Gordon", "together": 0}]
+        text = self.build(dict(DAILY, notes=notes)).messages[0]["content"]
+        self.assertIn("heard that Minsu Kim, another survivor, had died near", text)
+        self.assertIn("(they had spent about 3 hours in each other's company)", text)
+        self.assertIn("(they had never met in person)", text)
+
+        payload = {"kind": "comment", "lang": "EN", "character": {"name": "Eddie Gagnon", "profession": "Carpenter"},
+                   "dead": {"name": "Minsu Kim", "profession": "Nurse", "daysSurvived": 12, "date": "7/20",
+                            "place": {"town": "Riverside", "townDist": 90, "inside": True},
+                            "harm": [{"part": "Neck", "kind": "bitten"}]},
+                   "together": 185, "mentions": [{"date": "7/15", "text": "Minsu patched my arm today."}]}
+        req = self.build(payload)
+        body = req.messages[0]["content"]
+        self.assertIn("The survivor who died: Minsu Kim", body)
+        self.assertIn("after 12 days", body)
+        self.assertIn("The writer spent about 3 hours in their company.", body)
+        self.assertIn("- 7/15: Minsu patched my arm today.", body)
+        self.assertIn("Their last injuries:", body)
+        self.assertIn("remembrance", req.system)
+        stranger = self.build(dict(payload, together=0, mentions=[])).messages[0]["content"]
+        self.assertIn("never spent time with them in person", stranger)
+
+    def test_radio_lines(self):
+        radio = [{"clock": "10:02", "day": 8, "faction": "ray", "from": "player", "text": "Need canned food, can trade bandages"},
+                 {"clock": "10:03", "day": 8, "faction": "ray", "from": "npc", "text": "Bring me two boxes of bandages."},
+                 {"clock": "10:04", "faction": "bogus", "from": "npc", "text": "static"},
+                 {"clock": "10:05", "faction": "ray", "from": "npc", "text": ""}]
+        text = self.build(dict(DAILY, lang="EN", radio=radio)).messages[0]["content"]
+        self.assertIn("What was actually said on the radio", text)
+        self.assertIn('- [10:02] Eddie Gagnon to Ray Mercer: "Need canned food, can trade bandages"', text)
+        self.assertIn('- [10:03] Ray Mercer: "Bring me two boxes of bandages."', text)
+        self.assertIn('- [10:04] a radio contact: "static"', text)
+        self.assertEqual(text.count("[10:05]"), 0)
+        memoir = self.build({"kind": "memoir", "lang": "EN", "character": {"name": "Eddie Gagnon"}, "daysSurvived": 9,
+                             "days": [], "radio": radio}).messages[0]["content"]
+        self.assertIn('- [day 8 10:02] Eddie Gagnon to Ray Mercer:', memoir)
+        self.assertIn("Their last radio conversations", memoir)
+
     def test_unknown_kind(self):
         with self.assertRaises(ModuleError):
             self.build({"kind": "poem"})

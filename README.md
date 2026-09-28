@@ -1,7 +1,7 @@
 # StoryEngine Bridge
 
 Optional companion program for the **StoryEngine** Project Zomboid mod (Build 42.20+).
-It connects the mod's AI features — radio conversations, AI director, survival journal, inner monologue — to an AI service
+It connects the mod's AI features — radio conversations and calls from contacts, the open radio channel, AI director, survival journal, character conversations, inner monologue — to an AI service
 (OpenAI or Anthropic) using **your own API key**.
 
 Unofficial fan project, not affiliated with The Indie Stone, OpenAI or Anthropic. 한국어 안내: [release_docs/README_KO.md](release_docs/README_KO.md)
@@ -56,7 +56,7 @@ python build_release.py     # -> ../release/StoryEngineBridge-<version>-win64.zi
 | Path | Purpose |
 |---|---|
 | `bridge.py` | main loop, file protocol, rate limit |
-| `modules.py` | turns game requests into prompts and JSON schemas (journal, director, radio, monologue, summary) |
+| `modules.py` | turns game requests into prompts and JSON schemas (journal, director, radio, radio_scene, banter, monologue, summary) |
 | `providers/` | mock, OpenAI (Responses API), Anthropic |
 | `prompts/` | system prompts |
 | `setup_wizard.py` | first-run setup |

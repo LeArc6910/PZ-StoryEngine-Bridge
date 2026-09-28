@@ -28,7 +28,7 @@ The bridge sends requests **directly from your PC to the AI service you chose** 
 Nothing is sent to the mod author or any other server.
 
 Sent: character names and professions, in-game summaries (places, times, kills, injuries, moods, weather, quest events),
-radio messages that players type in the mod's radio window, and earlier journal/radio text for continuity.
+radio messages that players type in the mod's radio window (including the open channel), and earlier journal, radio and conversation text for continuity.
 Not sent: Steam IDs, account names, IP addresses of other players, or anything outside the game.
 Tell the people on your server that their radio messages go to an AI service.
 

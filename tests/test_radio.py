@@ -104,10 +104,51 @@ class RadioModuleTest(unittest.TestCase):
 
     def test_trade_schema(self):
         trade = self.build(PAYLOAD).json_schema["properties"]["trade"]
-        self.assertEqual(trade["properties"]["action"]["enum"], ["none", "offer", "refuse", "gift"])
+        self.assertEqual(trade["properties"]["action"]["enum"],
+                         ["none", "offer", "refuse", "gift", "counter", "withdraw"])
         self.assertIn("firearm", trade["properties"]["category"]["enum"])
         self.assertEqual(trade["properties"]["tier"]["enum"], [0, 1, 2, 3, 4, 5])
+        self.assertIn("price", trade["required"])
         self.assertFalse(trade["additionalProperties"])
+
+    def test_trade_catalog_marks_locked_tiers(self):
+        # 방위대: 신뢰도 45 → 3등급까지, 총기는 신뢰도 60부터
+        trade = {"allowed": True, "trust": 45, "maxTier": 3, "mult": 1.5,
+                 "goods": [{"category": "medical", "maxTier": 3}],
+                 "catalog": [{"category": "medical", "maxTier": 3, "needs": [20, 20, 40, 60]},
+                             {"category": "firearm", "maxTier": 0, "needs": [60, 60, 60, 60, 80]}],
+                 "wants": ["medical"]}
+        text = self.build({**PAYLOAD, "faction": "ray", "lang": "EN", "trade": trade}).messages[0]["content"]
+        self.assertIn("medical: 1 = some bandages; 2 = bandages, painkillers and disinfectant; "
+                      "3 = bandages, disinfectant and antibiotics; "
+                      "4 = a surgical kit with antibiotics, sutures and a splint (locked: needs trust 60)", text)
+        self.assertIn("firearm: 1 = a 9mm pistol or .38 revolver with a dozen rounds (locked: needs trust 60)", text)
+        self.assertIn("(locked: needs trust 80)", text)
+        self.assertIn("- You never trade: ammo, tools, melee, food", text)
+        self.assertIn("do NOT offer something smaller in its place", text)
+
+    def test_low_trust_mentions_threshold(self):
+        text = self.build({**PAYLOAD, "trade": {"allowed": False, "reason": "low_trust", "need": 20}}).messages[0]["content"]
+        self.assertIn("You would start trading at trust 20", text)
+        self.assertIn('action "refuse"', text)
+
+    def test_haggle_rules(self):
+        trade = {"allowed": False, "reason": "negotiating", "negotiating": True, "trust": 65,
+                 "deal": {"category": "food", "tier": 2, "price": 18, "basePrice": 20, "payCategory": "medical"},
+                 "floor": 14, "haggles": 1, "haggleLeft": 2, "wants": ["medical", "tools", "bogus"]}
+        text = self.build({**PAYLOAD, "faction": "ray", "lang": "EN", "trade": trade}).messages[0]["content"]
+        self.assertIn("You already offered them cans and water for a couple of days (food, tier 2) for payment in "
+                      "medical worth 18 value points (your first asking price was 20)", text)
+        self.assertIn("Your lowest price is 14 value points", text)
+        self.assertIn("Haggling rounds left: 2", text)
+        self.assertIn("(medical, tools)", text)
+        self.assertIn('action "counter"', text)
+        self.assertNotIn("What you can offer now", text)
+
+        done = dict(trade, haggleLeft=0)
+        text = self.build({**PAYLOAD, "faction": "ray", "lang": "EN", "trade": done}).messages[0]["content"]
+        self.assertIn("No more haggling", text)
+        self.assertNotIn("Haggling rounds left", text)
 
     def test_unknown_faction(self):
         with self.assertRaises(ModuleError):

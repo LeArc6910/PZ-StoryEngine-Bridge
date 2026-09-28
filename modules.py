@@ -173,6 +173,57 @@ def format_harm(harm: list) -> str:
     return "; ".join(out)
 
 
+# 일지용 행동 (게임 Sensor.ACT_KINDS 와 같은 목록). 없는 종류는 버린다.
+ACT_TEXT = {
+    "craft": "crafted",
+    "dismantle": "took apart for parts",
+    "cook": "cooked",
+    "build": "built",
+    "forage": "foraged",
+    "fish": "caught fish",
+    "fish_net": "checked fishing nets",
+    "chop": "chopped at trees",
+    "plant": "planted",
+    "harvest": "harvested crops",
+    "plow": "dug furrows in a field",
+    "water_plants": "watered the crops",
+    "trap": "set traps",
+    "butcher": "butchered animals",
+    "animals": "tended animals (milking, shearing, eggs, feeding)",
+    "read": "read",
+    "treat_other": "treated the wounds of",
+    "sew": "patched clothes",
+    "barricade": "barricaded windows or doors",
+    "bury": "buried the dead",
+    "burn_corpse": "burned corpses",
+    "mechanic": "worked on a vehicle",
+    "write": "wrote something down",
+    "exercise": "exercised",
+}
+MAX_ACT_NAMES = 6
+# 대상 이름이 없을 때 쓰는 문구
+ACT_ALONE = {"treat_other": "treated another survivor's wounds", "read": "read a book"}
+
+
+def format_acts(acts: Any) -> str:
+    out = []
+    for kind, a in as_dict(acts).items():
+        verb = ACT_TEXT.get(str(kind))
+        a = as_dict(a)
+        total = as_int(a.get("n"))
+        if not verb or total <= 0:
+            continue
+        names = sorted(((clip(w, 40), as_int(n)) for w, n in as_dict(a.get("w")).items() if w),
+                       key=lambda x: -x[1])[:MAX_ACT_NAMES]
+        detail = ", ".join(f"{w} x{n}" if n > 1 else w for w, n in names)
+        if detail:
+            out.append(f"{verb}: {detail}")
+        else:
+            verb = ACT_ALONE.get(str(kind), verb)
+            out.append(f"{verb} ({total} times)" if total > 1 else verb)
+    return "; ".join(out)
+
+
 def format_episode(ep: dict, lang: Any = None) -> str:
     ep = as_dict(ep)
     fields = [f"{clip(ep.get('from'), 5)}-{clip(ep.get('to'), 5)}", format_place(ep.get("place"), lang)]
@@ -188,6 +239,9 @@ def format_episode(ep: dict, lang: Any = None) -> str:
     harm = format_harm(ep.get("harm"))
     if harm:
         fields.append("injuries: " + harm)
+    acts = format_acts(ep.get("acts"))
+    if acts:
+        fields.append("did: " + acts)
     if ep.get("slept"):
         fields.append("slept here")
     return " | ".join(fields)
@@ -209,6 +263,9 @@ def format_summary(summary: dict) -> list[str]:
         f"Walked about {as_int(s.get('travel'))} tiles, at most {as_int(s.get('maxFromHome'))} tiles from home, "
         f"{as_int(s.get('outsideMin'))} minutes outdoors, killed {as_int(s.get('kills'))} zombies"
     )
+    acts = format_acts(s.get("acts"))
+    if acts:
+        lines.append(f"Work and chores today: {acts}")
     moods = format_moodles(s.get("moodlePeaks"))
     if moods:
         lines.append(f"Strongest feelings today: {moods}")
@@ -253,7 +310,10 @@ NOTE_TEXT = {
     "extort_demanded": "{who} threatened them over the radio, demanding {item}",
     "extort_completed": "{by} gave in to {who}'s threats and handed over {item}",
     "extort_failed": "never paid {who} what they demanded ({item})",
-    "extort_punished": "{who} made good on their threat and set the dead on them",
+    "death_of": "heard that {by}, another survivor, had died near {place}",
+    "extort_punished": "{who} made good on their threat and came after them (the dead or armed men)",
+    "alife_support": "{who} sent {count} armed people who fought at their side for a few hours",
+    "alife_attack": "{who} sent {count} armed men to hunt them down",
     "trade_accepted": "agreed to trade with {who} for {item}",
     "trade_completed": "{by} paid {who} and traded for {item}",
     "trade_failed": "backed out of a trade with {who} for {item}",
@@ -274,9 +334,38 @@ def faction_label(fid: Any, lang: Any) -> str:
     return f"{faction['name']} [{local}]" if local else faction["name"]
 
 
+MAX_RADIO_LINES = 30
+
+
+# 무전 교신 기록 (게임 Radio.logLine): 플레이어 자신의 말과 NPC 의 말. 플레이어 말은 발언으로만 다룬다.
+def format_radio(lines: Any, lang: Any, writer: str, with_day: bool = False) -> list[str]:
+    out = []
+    for m in as_list(lines)[-MAX_RADIO_LINES:]:
+        m = as_dict(m)
+        text = clip(m.get("text"), 220)
+        if not text:
+            continue
+        who = faction_label(m.get("faction"), lang) or (
+            "everyone on the open channel" if m.get("faction") == "open" else "a radio contact")
+        when = clip(m.get("clock"), 5)
+        if with_day and as_int(m.get("day")):
+            when = f"day {as_int(m.get('day'))} {when}"
+        if m.get("from") == "player":
+            out.append(f'- [{when}] {writer} to {who}: "{text}"')
+        else:
+            out.append(f'- [{when}] {who}: "{text}"')
+    return out
+
+
 def format_note(note: dict, lang: Any = None) -> str | None:
     note = as_dict(note)
     kind = str(note.get("kind"))
+    if kind == "banter":
+        spoken = [clip(line, 160) for line in as_list(note.get("lines"))[:4] if line]
+        if not spoken:
+            return None
+        who = ", ".join(clip(n, NAME_LIMIT) for n in as_list(note.get("with"))[:3] if n) or "a companion"
+        return f'{clip(note.get("clock"), 5)} talked with {who}: ' + " / ".join(f'"{x}"' for x in spoken)
     template = NOTE_TEXT.get(kind)
     if not template:
         return None
@@ -290,6 +379,14 @@ def format_note(note: dict, lang: Any = None) -> str | None:
         item=clip(note.get("item"), 40) or "package",
         count=as_int(note.get("count")) or "a few",
     )
+    if kind == "death_of":
+        together = as_int(note.get("together"))
+        if together >= 60:
+            text += f" (they had spent about {together // 60} hours in each other's company)"
+        elif together > 0:
+            text += " (they had only crossed paths briefly)"
+        else:
+            text += " (they had never met in person)"
     fight = as_dict(note.get("fight"))
     if fight:
         bits = []
@@ -339,6 +436,11 @@ def build_journal(payload: dict, mcfg: dict) -> LLMRequest:
             lines.append(entry)
         for ep in as_list(payload.get("episodes"))[-10:]:
             lines.append(f"- Final hours: {format_episode(ep, code)}")
+        name = clip(as_dict(payload.get("character")).get("name"), NAME_LIMIT) or "They"
+        radio = format_radio(payload.get("radio"), code, name, with_day=True)
+        if radio:
+            lines.append("Their last radio conversations (what they actually said and heard):")
+            lines.extend(radio)
         system = load_prompt("memoir")
     elif kind == "daily":
         episodes = as_list(payload.get("episodes"))[-MAX_EPISODES:]
@@ -357,6 +459,11 @@ def build_journal(payload: dict, mcfg: dict) -> LLMRequest:
         if notes:
             lines.append("Other things that happened:")
             lines.extend(f"- {n}" for n in notes)
+        writer = clip(as_dict(payload.get("character")).get("name"), NAME_LIMIT) or "They"
+        radio = format_radio(payload.get("radio"), code, writer)
+        if radio:
+            lines.append("What was actually said on the radio (the writer's own words and the replies they heard):")
+            lines.extend(radio)
         weeks = [as_dict(w) for w in as_list(payload.get("weeks"))[-1:]]
         for w in weeks:
             lines.append(f"The week before, in brief (days {as_int(w.get('from'))}-{as_int(w.get('to'))}): "
@@ -365,6 +472,31 @@ def build_journal(payload: dict, mcfg: dict) -> LLMRequest:
         if previous:
             lines.append(f"Previous diary entry (for continuity, do not repeat it): {previous}")
         system = load_prompt("journal")
+    elif kind == "comment":
+        # 다른 생존자의 죽음에 대한 짧은 추모 (회고록 아래 코멘트)
+        dead = as_dict(payload.get("dead"))
+        lines = [f"Language: {lang}", f"Writer: {character}",
+                 f"The survivor who died: {format_character(dead)}, after {as_int(dead.get('daysSurvived'))} days, "
+                 f"on {clip(dead.get('date'), 20)}"]
+        place = dead.get("place")
+        if isinstance(place, dict) and place:
+            lines.append(f"Where they died: {format_place(place, code)}")
+        harm = format_harm(dead.get("harm"))
+        if harm:
+            lines.append(f"Their last injuries: {harm}")
+        together = as_int(payload.get("together"))
+        if together >= 60:
+            lines.append(f"The writer spent about {together // 60} hours in their company.")
+        elif together > 0:
+            lines.append("The writer crossed paths with them only briefly.")
+        else:
+            lines.append("The writer never spent time with them in person; they only knew of them.")
+        mentions = [as_dict(m) for m in as_list(payload.get("mentions"))[:3]]
+        if mentions:
+            lines.append("What the writer's own diary said when the dead survivor came up:")
+            for m in mentions:
+                lines.append(f"- {clip(m.get('date'), 20)}: {clip(m.get('text'), 300)}")
+        system = load_prompt("journal_comment")
     else:
         raise ModuleError("bad_payload")
 
@@ -614,6 +746,8 @@ FACTIONS = {
 }
 MAX_HISTORY = 16
 TRADE_CATEGORIES = ["firearm", "ammo", "tools", "medical", "melee", "food"]
+# counter / withdraw 는 답을 기다리는 제안을 흥정할 때만 쓴다
+TRADE_ACTIONS = ["none", "offer", "refuse", "gift", "counter", "withdraw"]
 # 등급별 거래 물건 안내 (게임 Trade.lua GOODS 와 맞춘다)
 TRADE_TIERS = {
     "food": ["a few cans", "cans and water for a couple of days", "food and water for most of a week",
@@ -632,16 +766,65 @@ TRADE_TIERS = {
 }
 
 
+def tier_name(fid: str, cat: str, tier: int) -> str:
+    names = FACTIONS.get(fid, {}).get("trade_tiers", {}).get(cat, TRADE_TIERS.get(cat, []))
+    return names[tier - 1] if 1 <= tier <= len(names) else f"{cat} tier {tier}"
+
+
+# 답을 기다리는 거래 제안에 대한 흥정 (게임 Trade.negotiate 가 하한선·횟수를 다시 검증한다)
+def format_haggle_rules(trade: dict, fid: str = "") -> list[str]:
+    deal = as_dict(trade.get("deal"))
+    cat = str(deal.get("category"))
+    tier = as_int(deal.get("tier"))
+    price = as_int(deal.get("price"))
+    base = as_int(deal.get("basePrice"), price)
+    floor = as_int(trade.get("floor"), price)
+    pay = str(deal.get("payCategory"))
+    left = as_int(trade.get("haggleLeft"))
+    wants = [w for w in as_list(trade.get("wants")) if w in TRADE_CATEGORIES]
+    first = f" (your first asking price was {base})" if base != price else ""
+    lines = [
+        "Trading rules (from the game, you must follow them):",
+        f"- You already offered them {tier_name(fid, cat, tier)} ({cat}, tier {tier}) for payment in {pay} "
+        f"worth {price} value points{first}. They have not accepted or declined yet.",
+        "- Make no new offer until this deal is settled. If they ask for something else, tell them to settle this "
+        "one first.",
+    ]
+    if left > 0:
+        lines += [
+            f"- They may haggle: ask for a lower price, or offer to pay in another category you accept "
+            f"({', '.join(wants) or pay}). Your lowest price is {floor} value points; the game never goes lower. "
+            f"Haggling rounds left: {left}.",
+            "- Decide in character how far you move: take their price if it is at or above your lowest, meet them "
+            "halfway, or hold firm. Give ground step by step over the rounds; do not drop straight to your lowest "
+            "price, least of all for an insulting offer. To change the terms use action \"counter\" with the new \"price\" and "
+            "\"pay_category\" (keep the deal's category and tier). To keep the terms use action \"none\".",
+            "- While haggling you may say the price in your reply.",
+        ]
+    else:
+        lines.append("- No more haggling: you have moved as far as you will. Keep the terms (action \"none\"), "
+                     "or call off the deal (action \"withdraw\") if they keep pushing.")
+    lines.append("- If their offer is insulting (far below your lowest price) or they are rude about it, you may lower "
+                 "trust by 1 and you may call off the deal with action \"withdraw\".")
+    return lines
+
+
 def format_trade_rules(trade: dict, fid: str = "") -> list[str]:
     trade = as_dict(trade)
     special = FACTIONS.get(fid, {}).get("trade_tiers", {})
+    if trade.get("negotiating"):
+        return format_haggle_rules(trade, fid)
     if not trade.get("allowed"):
         reason = str(trade.get("reason", ""))
         if reason == "low_trust":
+            need = as_int(trade.get("need"), 20)
             return ["Trading rules: you will not trade with these players at all right now; you do not trust them. "
-                    "Refuse any request for goods, in character."]
+                    "Refuse any request for goods, in character (action \"refuse\" with the category and tier they "
+                    f"asked for), and make clear you do not trade with people you do not trust yet. "
+                    f"(You would start trading at trust {need}.)"]
         if reason == "open_deal":
-            return ["Trading rules: they already have an unfinished deal with you. Tell them to finish that one first "
+            return ["Trading rules: there is already an unfinished deal (their group shares deals, so it may be one "
+                    "a companion made, with you or another contact). Tell them to finish that one first "
                     "and do not make a new offer."]
         return ["Trading rules: do not offer any trade in this message."]
     lines = ["Trading rules (from the game, you must follow them):"]
@@ -654,11 +837,36 @@ def format_trade_rules(trade: dict, fid: str = "") -> list[str]:
             goods.append((cat, top))
     lines.append("- What you can offer now (category up to tier): " +
                  ", ".join(f"{cat} up to {top}" for cat, top in goods))
-    for cat, top in goods:
-        names = special.get(cat, TRADE_TIERS[cat])
-        top = min(top, len(names))
-        tiers = "; ".join(f"{i + 1} = {names[i]}" for i in range(top))
-        lines.append(f"  {cat}: {tiers}")
+    catalog = []
+    for c in as_list(trade.get("catalog")):
+        c = as_dict(c)
+        cat = str(c.get("category"))
+        if cat in TRADE_TIERS:
+            catalog.append((cat, max(0, as_int(c.get("maxTier"))), [as_int(n, 101) for n in as_list(c.get("needs"))]))
+    if catalog:
+        # 취급하는 모든 등급을 보여 주고, 아직 못 주는 등급은 필요한 신뢰도와 함께 잠김으로 표시한다
+        for cat, top, needs in catalog:
+            names = special.get(cat, TRADE_TIERS[cat])
+            tiers = []
+            for i, need in enumerate(needs[:len(names)]):
+                if i + 1 <= top:
+                    tiers.append(f"{i + 1} = {names[i]}")
+                elif need <= 100:
+                    tiers.append(f"{i + 1} = {names[i]} (locked: needs trust {need})")
+            lines.append(f"  {cat}: " + "; ".join(tiers))
+        never = [c for c in TRADE_CATEGORIES if c not in {cat for cat, _, _ in catalog}]
+        if never:
+            lines.append("- You never trade: " + ", ".join(never))
+        lines.append("- If they clearly ask for something locked, or anything above what you can offer now, do NOT "
+                     "offer something smaller in its place. Refuse with action \"refuse\", putting the category and "
+                     "tier they asked for, and tell them plainly that it takes more trust than they have earned "
+                     "(or that you never deal in it). They can ask for something smaller themselves.")
+    else:
+        for cat, top in goods:
+            names = special.get(cat, TRADE_TIERS[cat])
+            top = min(top, len(names))
+            tiers = "; ".join(f"{i + 1} = {names[i]}" for i in range(top))
+            lines.append(f"  {cat}: {tiers}")
     wants = [w for w in as_list(trade.get("wants")) if w in TRADE_CATEGORIES]
     lines.append("- Payment you accept: " + (", ".join(wants) or "none"))
     recent = as_int(trade.get("recentRequests"))
@@ -696,6 +904,47 @@ def trust_tone(trust: int) -> str:
         if trust < limit:
             return tone
     return TRUST_TONES[-1][1]
+def trust_word(trust: int) -> str:
+    for limit, word in ((20, "not at all"), (40, "a little"), (60, "somewhat"), (80, "a lot")):
+        if trust < limit:
+            return word
+    return "completely"
+
+
+# 게임 Social.context: 이 NPC 의 이야기, 다른 NPC 에 대한 생각, 들은 소식
+def format_story_context(story: Any) -> list[str]:
+    story = as_dict(story)
+    out = []
+    beat = clip(story.get("beat"), 400)
+    if beat:
+        out.append(f"What is going on in your own life right now: {beat}")
+    past = [clip(x, 300) for x in as_list(story.get("past"))[-3:] if x]
+    if past:
+        out.append("Earlier in your life since the outbreak: " + " ".join(past))
+    others = []
+    for o in as_list(story.get("others"))[:6]:
+        o = as_dict(o)
+        f = FACTIONS.get(str(o.get("id")))
+        note = clip(o.get("note"), 200)
+        if not f or not note:
+            continue
+        line = f"{f['name']}: {note}"
+        trust = as_int(o.get("trust"), -1)
+        if trust >= 0:
+            line += f"; they trust the players {trust_word(trust)}"
+        obeat = clip(o.get("beat"), 220)
+        if obeat:
+            line += f'; their situation lately, in their own words ("you" means them): {obeat}'
+        others.append("- " + line)
+    if others:
+        out.append("Other people on the radio you know (mention them when it comes up naturally):")
+        out.extend(others)
+    news = [clip(x, 300) for x in as_list(story.get("news"))[-3:] if x]
+    if news:
+        out.append("Things you have heard lately: " + " ".join(news))
+    return out
+
+
 FOLLOW_UP_HOURS = [0, 1, 2, 3, 4, 6, 8, 12, 24]
 MAX_MESSAGE = 240
 
@@ -719,6 +968,7 @@ def build_radio(payload: dict, mcfg: dict) -> LLMRequest:
     memory = clip(payload.get("memory"), 1000)
     if memory:
         persona.append(f"What you remember from earlier talks: {memory}")
+    persona.extend(format_story_context(payload.get("story")))
 
     lines = [
         f"Language: {language_name(code)}",
@@ -751,6 +1001,12 @@ def build_radio(payload: dict, mcfg: dict) -> LLMRequest:
     elif mode == "request":
         lines.append(f"You need help: {topic}")
         lines.append(f"Now start the call as {faction['name']} and ask for it.")
+    elif mode == "chat":
+        lines.append(f"Nobody has called you. You are calling them yourself, just to talk: {topic}")
+        lines.append(f"Now start the call as {faction['name']}.")
+    elif mode == "crisis":
+        lines.append(f"Something is happening and you need their help, but others need it too: {topic}")
+        lines.append(f"Now start the call as {faction['name']} and ask them to choose to help you.")
     else:
         lines.append(f"Now answer as {faction['name']}.")
     lines.append(f"Speak only {language_name(code)}, even if some lines above are in English. "
@@ -766,12 +1022,13 @@ def build_radio(payload: dict, mcfg: dict) -> LLMRequest:
             "trade": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "enum": ["none", "offer", "refuse", "gift"]},
+                    "action": {"type": "string", "enum": TRADE_ACTIONS},
                     "category": {"type": "string", "enum": TRADE_CATEGORIES + ["none"]},
                     "tier": {"type": "integer", "enum": [0, 1, 2, 3, 4, 5]},
                     "pay_category": {"type": "string", "enum": TRADE_CATEGORIES + ["none"]},
+                    "price": {"type": "integer"},
                 },
-                "required": ["action", "category", "tier", "pay_category"],
+                "required": ["action", "category", "tier", "pay_category", "price"],
                 "additionalProperties": False,
             },
         },
@@ -945,9 +1202,218 @@ def build_summary(payload: dict, mcfg: dict) -> LLMRequest:
     )
 
 
+# ---------------------------------------------------------------- open channel scene
+
+MAX_SCENE_LINES = 6
+
+
+def build_radio_scene(payload: dict, mcfg: dict) -> LLMRequest:
+    code = str(payload.get("lang") or "EN").upper()
+    parts = []
+    for x in as_list(payload.get("participants"))[:3]:
+        x = as_dict(x)
+        if str(x.get("id")) in FACTIONS:
+            parts.append(x)
+    ids = [str(x.get("id")) for x in parts]
+    if len(ids) < 2:
+        raise ModuleError("bad_payload")
+    lines = [
+        f"Language: {language_name(code)}",
+        "Open radio channel 121.5: everyone on the air can hear.",
+        f"Day {as_int(payload.get('day'))} after the outbreak, {clip(payload.get('clock'), 5)}.",
+        "People on the channel (use these ids as speaker):",
+    ]
+    for x in parts:
+        fid = str(x.get("id"))
+        f = FACTIONS[fid]
+        local = f["local"].get(code, "")
+        name = f"{f['name']} ({local})" if local else f["name"]
+        bits = [f"- {fid} = {name}. {f['who']}"]
+        beat = clip(x.get("beat"), 300)
+        if beat:
+            bits.append(f'Their situation now, in their own words ("you" means them): {beat}')
+        bits.append(f"They trust the players {trust_word(max(0, min(100, as_int(x.get('trust'), 30))))}.")
+        rels = []
+        for r in as_list(x.get("relations"))[:3]:
+            r = as_dict(r)
+            other = FACTIONS.get(str(r.get("id")))
+            if other and r.get("note"):
+                rels.append(f"about {other['name']}: {clip(r.get('note'), 200)}")
+        if rels:
+            bits.append("What they think of the others here: " + "; ".join(rels) + ".")
+        lines.append(" ".join(bits))
+    players = [clip(pl, NAME_LIMIT) for pl in as_list(payload.get("players"))[:MAX_PLAYERS] if pl]
+    if players:
+        lines.append("Players listening: " + ", ".join(players))
+    lines.append("Recent talk on the open channel (oldest first):")
+    log = as_list(payload.get("log"))[-12:]
+    for m in log:
+        m = as_dict(m)
+        text = clip(m.get("text"), MAX_MESSAGE)
+        if not text:
+            continue
+        if m.get("from") == "player":
+            who = f"{clip(m.get('name'), NAME_LIMIT) or 'a player'} (a player)"
+        else:
+            who = FACTIONS.get(str(m.get("npc")), {}).get("name", "someone")
+        lines.append(f'[{clip(m.get("clock"), 5)}] {who}: "{text}"')
+    if not log:
+        lines.append("(nothing yet)")
+    said = as_dict(payload.get("said"))
+    if said.get("text"):
+        lines.append(f'{clip(said.get("name"), NAME_LIMIT) or "A player"} (one of the players) just said on the open channel: '
+                     f'"{clip(said.get("text"), MAX_MESSAGE)}"')
+        lines.append("Those who would react answer the player first, each in their own way, then they react to each other.")
+    else:
+        lines.append(f"What they talk about now: {clip(payload.get('topic'), 400) or 'small talk'}")
+    lines.append(f"Write 3 to {MAX_SCENE_LINES} lines. Speak only {language_name(code)}. "
+                 "Do not mix in English words, except radio words like \"over\" when natural.")
+    schema = {
+        "type": "object",
+        "properties": {
+            "lines": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"speaker": {"type": "string", "enum": ids}, "text": {"type": "string"}},
+                    "required": ["speaker", "text"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["lines"],
+        "additionalProperties": False,
+    }
+    return LLMRequest(
+        module="radio_scene",
+        model=str(mcfg.get("model", "mock")),
+        system=load_prompt("radio_scene"),
+        messages=[{"role": "user", "content": "\n".join(lines)}],
+        max_tokens=int(mcfg.get("max_tokens", 4000)),
+        effort=mcfg.get("effort"),
+        json_schema=schema,
+    )
+
+
+# ---------------------------------------------------------------- banter
+
+# 캐릭터끼리의 대화 계기. 혼잣말 계기(MONOLOGUE_TRIGGERS)는 "{who}에게 일어난 일"로 쓴다.
+BANTER_EVENTS = {
+    "chat": "Nothing in particular is happening; they are just spending time together.",
+    "fight": "They just fought side by side and put down about {count} of the dead together. It has gone quiet.",
+    "horde_near": "A pack of about {count} of the dead is hunting {who} down and is getting close.",
+    "armed_attack": "Armed men sent by {faction} are closing in on {who}.",
+    "support_arrived": "{count} armed people sent by {faction} just showed up to back them up.",
+    "support_left": "The armed people {faction} sent to back them up are heading home.",
+    "quest_accepted": "{who} just agreed to {what} for {faction}.",
+    "quest_completed": "They just finished {what}{for_faction}.",
+    "quest_failed": "They ran out of time on {what}{for_faction}.",
+    "radio": "{who} just talked with {faction} on the radio, who answered: \"{text}\"",
+    "death": "They just heard that {name}, another survivor, has died.",
+}
+MAX_BANTER_LINES = 4
+
+
+def format_banter_event(event: dict, code: str) -> str:
+    event = as_dict(event)
+    kind = str(event.get("kind"))
+    info = as_dict(event.get("info"))
+    who = clip(event.get("who"), NAME_LIMIT) or "one of them"
+    if kind in MONOLOGUE_TRIGGERS:
+        return f"This just happened to {who}: " + format_trigger(kind, info, code)
+    template = BANTER_EVENTS.get(kind)
+    if not template:
+        raise ModuleError("unknown_event")
+    faction = faction_label(info.get("faction"), code)
+    return template.format(
+        who=who, count=as_int(info.get("count")) or "several", faction=faction or "a radio contact",
+        for_faction=f" for {faction}" if faction else "", what=clip(info.get("what"), 80) or "a job",
+        text=clip(info.get("text"), 200), name=clip(info.get("name"), NAME_LIMIT) or "someone",
+    )
+
+
+def build_banter(payload: dict, mcfg: dict) -> LLMRequest:
+    speakers = [as_dict(x) for x in as_list(payload.get("speakers"))[:3]]
+    names = [clip(x.get("name"), NAME_LIMIT) for x in speakers if clip(x.get("name"), NAME_LIMIT)]
+    if len(names) < 2:
+        raise ModuleError("bad_payload")
+    langs = {str(x.get("lang") or "EN").upper() for x in speakers}
+    code = next(iter(langs)) if len(langs) == 1 else "EN"
+    lines = []
+    if len(langs) == 1:
+        lines.append(f"Language: everyone speaks {language_name(code)}")
+    else:
+        lines.append("Language: each person speaks their own language: " + ", ".join(
+            f"{clip(x.get('name'), NAME_LIMIT)} speaks {language_name(str(x.get('lang') or 'EN').upper())}" for x in speakers))
+    lines.append("Speakers:")
+    for x in speakers:
+        bits = [format_character(x)]
+        hp = as_int(x.get("hp"), 100)
+        if hp < 45:
+            bits.append("badly hurt")
+        elif hp < 80 or as_int(x.get("wounds")):
+            bits.append("hurt")
+        moods = format_moodles(x.get("moodles"))
+        if moods:
+            bits.append("feeling " + ", ".join(m.split(" ")[0] for m in moods.split(", ")))
+        known = []
+        for m in as_list(x.get("met"))[:3]:
+            m = as_dict(m)
+            hours = as_int(m.get("minutes")) // 60
+            other = clip(m.get("name"), NAME_LIMIT)
+            if other:
+                known.append(f"has spent about {hours} hours in total with {other} since they met (not in one stretch)"
+                             if hours else f"has barely spent time with {other}")
+        if known:
+            bits.append("; ".join(known))
+        lines.append("- " + "; ".join(bits))
+    lines.append(f"Day {as_int(payload.get('day'))} after the outbreak, {clip(payload.get('clock'), 5)}.")
+    lines.append(f"Where: {format_place(payload.get('place'), code)}")
+    weather = as_dict(payload.get("weather"))
+    sky = [w for w, key in (("rain", "raining"), ("snow", "snowing"), ("thunder", "thunder")) if weather.get(key)]
+    if sky:
+        lines.append("Weather: " + ", ".join(sky))
+    radio = format_radio(payload.get("radio"), code, "one of them")
+    if radio:
+        lines.append("Recent radio talk they know about:")
+        lines.extend(radio)
+    said = [clip(x, 160) for x in as_list(payload.get("said"))[-MAX_SAID:] if x]
+    if said:
+        lines.append("Lines they said recently (do not repeat): " + " / ".join(said))
+    lines.append("What just happened: " + format_banter_event(payload.get("event"), code))
+    lines.append(f"Write 2 to {MAX_BANTER_LINES} lines between: {', '.join(names)}.")
+    schema = {
+        "type": "object",
+        "properties": {
+            "lines": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"speaker": {"type": "string", "enum": names}, "text": {"type": "string"}},
+                    "required": ["speaker", "text"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["lines"],
+        "additionalProperties": False,
+    }
+    return LLMRequest(
+        module="banter",
+        model=str(mcfg.get("model", "mock")),
+        system=load_prompt("banter"),
+        messages=[{"role": "user", "content": "\n".join(lines)}],
+        max_tokens=int(mcfg.get("max_tokens", 2000)),
+        effort=mcfg.get("effort"),
+        json_schema=schema,
+    )
+
+
 BUILDERS = {
     "debug": build_debug,
     "journal": build_journal,
+    "banter": build_banter,
+    "radio_scene": build_radio_scene,
     "director": build_director,
     "radio": build_radio,
     "monologue": build_monologue,

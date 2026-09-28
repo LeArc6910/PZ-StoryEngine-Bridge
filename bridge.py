@@ -39,7 +39,7 @@ from modules import ModuleError, build_request  # noqa: E402
 from providers import ProviderError, create_provider  # noqa: E402
 
 PROTOCOL_VERSION = 1
-BRIDGE_VERSION = "0.1.0"
+BRIDGE_VERSION = "0.2.0"
 ID_PATTERN = re.compile(r"^[A-Za-z0-9_\-]{1,80}$")
 
 log = logging.getLogger("bridge")
@@ -237,6 +237,10 @@ class Bridge:
             mcfg = self.cfg["modules"].get(module)
             if mcfg is None and module == "summary":
                 mcfg = self.cfg["modules"].get("journal")
+            if mcfg is None and module == "banter":
+                mcfg = self.cfg["modules"].get("monologue")
+            if mcfg is None and module == "radio_scene":
+                mcfg = self.cfg["modules"].get("radio")
             if mcfg is None:
                 raise ModuleError("unknown_module")
             llm_req = build_request(module, req.get("payload") or {}, mcfg)

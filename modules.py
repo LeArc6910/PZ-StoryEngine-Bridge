@@ -662,6 +662,7 @@ FACTIONS = {
                "Warm, talkative, lonely, a little too trusting. Low on supplies but has some canned food and "
                "a bit of medicine. Misses his daughter in Louisville. Talks like a Kentucky trucker.",
         "trust": "Starts friendly.",
+        "speech": {"KO": "warm, easygoing speech of an older man: banmal mixed with 하게체 (자네, ~네, ~게, ~구먼)."},
     },
     "guard": {
         "name": "Sergeant Dale Whitaker",
@@ -671,6 +672,7 @@ FACTIONS = {
                "Well armed but short on medicine and tools. Deeply suspicious of civilians, never careless "
                "with weapons or ammunition.",
         "trust": "Starts wary. Earns trust slowly and loses it fast.",
+        "speech": {"KO": "stiff military 다나까 speech (~다, ~습니다, ~나?, ~까?). Never 해요체, never casual banmal."},
     },
     "rats": {
         "name": "Vic",
@@ -680,6 +682,7 @@ FACTIONS = {
                "the county clean and has a bit of everything, for a price. Not a murderer over the radio, "
                "but always looking for an angle.",
         "trust": "Starts cold. Respects toughness and good deals, not politeness.",
+        "speech": {"KO": "rough, sarcastic banmal with everyone (~냐, ~지, ~거든, ~해라)."},
     },
     "casey": {
         "name": "Casey Liu",
@@ -689,6 +692,7 @@ FACTIONS = {
                "radio jargon, and is desperate for someone to talk to. Knows batteries, radios, generators and wiring. "
                "Tries to sound older than they are.",
         "trust": "Starts eager and friendly, but gets scared and closes up if anyone sounds threatening.",
+        "speech": {"KO": "polite 해요체 toward adults, a bit breathless (~요, ~거든요, ~잖아요). Never banmal."},
         "trade_tiers": {
             "tools": ["a few batteries or a flashlight", "a walkie-talkie or radio with batteries",
                       "electronics parts, wire and a manual, or a better walkie-talkie",
@@ -702,6 +706,7 @@ FACTIONS = {
                "of wounded survivors. Calm, direct, exhausted, dry sense of humour. Rations medicine carefully and "
                "asks clinical questions about injuries. Will not waste supplies on people who lie to her.",
         "trust": "Starts polite but guarded. Warms to people who are honest and look after others.",
+        "speech": {"KO": "calm, polite 존댓말 (합쇼체 and 해요체: ~습니다, ~세요, ~해요). Colder or warmer with trust, but never banmal."},
         "trade_tiers": {
             "medical": ["bandages and wipes", "bandages, painkillers, disinfectant and tweezers",
                         "antibiotics with a suture kit", "a surgical kit with antibiotics, splints and a scalpel",
@@ -715,6 +720,7 @@ FACTIONS = {
                "congregation. Gentle, patient, speaks in a slow Kentucky drawl and quotes scripture now and then. "
                "Believes in charity and asks less than things are worth. Quietly firm with anyone who threatens his flock.",
         "trust": "Starts kind but careful. Trust grows when players help others, not only themselves.",
+        "speech": {"KO": "gentle, slow 존댓말 (~습니다, ~지요, ~시오); may call them 형제님 or 자매님."},
     },
     "dewey": {
         "name": "Dewey Hollis",
@@ -723,6 +729,7 @@ FACTIONS = {
                "Friendly in a gruff way, talks about engines constantly, swears when things go wrong. Trades car parts "
                "and tools and dreams of building a truck that can get people out of the county.",
         "trust": "Starts neutral. Likes people who keep their word and can fix things.",
+        "speech": {"KO": "gruff, friendly banmal (~야, ~지, ~거든, ~냐)."},
         "trade_tiers": {
             "tools": ["a screwdriver or wrench", "a lug wrench and jack, or a tire pump",
                       "engine parts or a car battery", "a better car battery with engine parts, or a welding kit",
@@ -736,6 +743,7 @@ FACTIONS = {
                "everyone, lived off the land long before the outbreak. Knows rifles, knives, traps and dried meat. "
                "Has no patience for fools or talkers.",
         "trust": "Starts at zero. Barely answers strangers. Only deeds earn his respect.",
+        "speech": {"KO": "very short, gruff banmal (~다, ~냐, ~해라)."},
         "trade_tiers": {
             "firearm": ["an old snub revolver with a few rounds", "a .357 or .44 revolver with a box of ammo",
                         "a hunting rifle (.308 or .30-30) with a box", "a scoped hunting rifle or a double-barrel shotgun with ammo"],
@@ -904,6 +912,25 @@ def trust_tone(trust: int) -> str:
         if trust < limit:
             return tone
     return TRUST_TONES[-1][1]
+
+
+# 공용 주파수 장면용 3인칭 태도 (TRUST_TONES 와 같은 구간)
+TRUST_ATTITUDES = [
+    (20, "distrusts the players deeply: curt, cold and suspicious with them"),
+    (40, "is wary of the players: short, guarded, questions their motives"),
+    (60, "is neutral toward the players: polite and businesslike"),
+    (80, "likes the players: warm, uses their names, cares what happens to them"),
+    (101, "treats the players as trusted friends: open, warm, joking, protective"),
+]
+
+
+def trust_attitude(trust: int) -> str:
+    for limit, text in TRUST_ATTITUDES:
+        if trust < limit:
+            return text
+    return TRUST_ATTITUDES[-1][1]
+
+
 def trust_word(trust: int) -> str:
     for limit, word in ((20, "not at all"), (40, "a little"), (60, "somewhat"), (80, "a lot")):
         if trust < limit:
@@ -931,7 +958,7 @@ def format_story_context(story: Any) -> list[str]:
         line = f"{f['name']}: {note}"
         trust = as_int(o.get("trust"), -1)
         if trust >= 0:
-            line += f"; they trust the players {trust_word(trust)}"
+            line += f"; how much they (not you) trust the players: {trust_word(trust)}"
         obeat = clip(o.get("beat"), 220)
         if obeat:
             line += f'; their situation lately, in their own words ("you" means them): {obeat}'
@@ -961,10 +988,17 @@ def build_radio(payload: dict, mcfg: dict) -> LLMRequest:
     trust = max(0, min(100, as_int(payload.get("trust"), 50)))
     persona = [
         f"You are: {name}. {faction['who']}",
-        f"Trust: {faction['trust']} Current trust in these players: {trust}/100.",
-        f"Your attitude toward them right now: {trust_tone(trust)} Keep your own personality; the attitude "
-        "changes how much warmth and openness you show, not who you are.",
+        f"How you treat strangers at first (only matters before trust is built): {faction['trust']}",
+        f"Current trust in these players: {trust}/100.",
+        f"Your attitude toward them right now: {trust_tone(trust)} This follows the trust number only; do not "
+        "drift warmer or colder than this because of the log, your memories or other people's feelings. Keep "
+        "your own personality; the attitude changes how much warmth and openness you show, not who you are.",
     ]
+    speech = faction.get("speech", {}).get(code)
+    if speech:
+        persona.append(f"Your speech level in {language_name(code)}: {speech} Use this same speech level in every "
+                       "message, whatever the trust and whatever earlier lines in the log used; trust changes warmth, "
+                       "not speech level.")
     memory = clip(payload.get("memory"), 1000)
     if memory:
         persona.append(f"What you remember from earlier talks: {memory}")
@@ -1232,7 +1266,10 @@ def build_radio_scene(payload: dict, mcfg: dict) -> LLMRequest:
         beat = clip(x.get("beat"), 300)
         if beat:
             bits.append(f'Their situation now, in their own words ("you" means them): {beat}')
-        bits.append(f"They trust the players {trust_word(max(0, min(100, as_int(x.get('trust'), 30))))}.")
+        bits.append(f"Toward the players this person {trust_attitude(max(0, min(100, as_int(x.get('trust'), 30))))}.")
+        speech = f.get("speech", {}).get(code)
+        if speech:
+            bits.append(f"Speech level, always the same: {speech}")
         rels = []
         for r in as_list(x.get("relations"))[:3]:
             r = as_dict(r)
@@ -1263,6 +1300,9 @@ def build_radio_scene(payload: dict, mcfg: dict) -> LLMRequest:
     if said.get("text"):
         lines.append(f'{clip(said.get("name"), NAME_LIMIT) or "A player"} (one of the players) just said on the open channel: '
                      f'"{clip(said.get("text"), MAX_MESSAGE)}"')
+        interrupted = clip(payload.get("interrupted"), 400)
+        if interrupted:
+            lines.append(f"The player cut into a conversation that was still going on. It was about: {interrupted}")
         lines.append("Those who would react answer the player first, each in their own way, then they react to each other.")
     else:
         lines.append(f"What they talk about now: {clip(payload.get('topic'), 400) or 'small talk'}")

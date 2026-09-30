@@ -1099,6 +1099,7 @@ RECORD_TEXT = {
     "trade_done": "{who} completed a trade with you",
     "trade_failed": "{who} backed out of a trade with you",
     "crisis_helped": "{who} chose to help you when several people needed help",
+    "crisis_ally": "{who} helped someone else in a crisis in a way that also helped your people",
     "crisis_snubbed": "{who} chose to help someone else instead of you in a crisis",
     "crisis_ignored": "nobody answered when you asked for help in a crisis",
     "donation": "{who} sent your people supplies without being asked",

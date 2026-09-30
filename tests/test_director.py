@@ -31,6 +31,11 @@ class DirectorModuleTest(unittest.TestCase):
     def build(self, payload):
         return build_request("director", payload, {"model": "m", "max_tokens": 100})
 
+    def test_world_conditions(self):
+        text = self.build(dict(PAYLOAD, world=["no power", "winter"])).messages[0]["content"]
+        self.assertIn("County conditions now: no power, winter.", text)
+        self.assertNotIn("County conditions", self.build(PAYLOAD).messages[0]["content"])
+
     def test_prompt_facts(self):
         text = self.build(PAYLOAD).messages[0]["content"]
         self.assertIn("Day 3, 7/11 08:00. Weather: dry, 25C.", text)

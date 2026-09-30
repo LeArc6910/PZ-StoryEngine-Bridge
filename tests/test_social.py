@@ -38,6 +38,25 @@ class SocialTest(unittest.TestCase):
         self.assertIn("Things you have heard lately: A helicopter", req.system)
         self.assertNotIn("bogus", req.system)
 
+    def test_bonds(self):
+        story = {"others": [{"id": "casey", "note": "you worry about that kid", "trust": 70, "bond": 3,
+                             "shift": "Ray drove a load of supplies over to them"},
+                            {"id": "dewey", "bond": -2, "shift": "the players chose to help Casey over Dewey in a crisis"},
+                            {"id": "pike", "bond": 0}]}
+        sys_text = self.radio(story=story).system
+        self.assertIn("feeling now: they are a close friend; what changed it lately: Ray drove", sys_text)
+        # 관계표에 없던 사람도 마음이 생기면 들어간다
+        self.assertIn("- Dewey Hollis: you did not know them well at first; feeling now: you dislike them", sys_text)
+        self.assertNotIn("Pike", sys_text)
+        self.assertIn("the feeling now is what counts", sys_text)
+        payload = {"lang": "EN", "participants": [
+            {"id": "ray", "trust": 70, "relations": [{"id": "rats", "note": "vultures", "bond": -1,
+                                                      "shift": "Vic's crew robbed the church"}]},
+            {"id": "rats", "trust": 5, "relations": [{"id": "ray", "bond": 1}]}], "log": []}
+        text = build_request("radio_scene", payload, {"model": "m"}).messages[0]["content"]
+        self.assertIn("about Vic: vultures, feeling now: they are wary of them; what changed it lately: Vic's crew", text)
+        self.assertIn("about Ray Mercer: feeling now: they get along", text)
+
     def test_chat_and_crisis_modes(self):
         chat = self.radio(mode="chat", topic="Tell them about the beans.").messages[0]["content"]
         self.assertIn("You are calling them yourself, just to talk: Tell them about the beans.", chat)

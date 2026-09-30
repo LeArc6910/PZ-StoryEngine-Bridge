@@ -277,6 +277,13 @@ def format_summary(summary: dict) -> list[str]:
 
 NOTE_TEXT = {
     "storm": "a storm rolled in",
+    "world_power": "the power grid went down across the county; the lights and fridges died for good",
+    "world_water": "the water stopped running from the taps",
+    "world_winter": "winter set in and the nights turned freezing",
+    "world_snow": "the first snow of the winter fell",
+    "world_day30": "it has been a month since the outbreak",
+    "world_day90": "it has been three months since the outbreak",
+    "world_day180": "it has been half a year since the outbreak",
     "supply_drop_offered": "heard over the radio that {who} left supplies at {place}",
     "supply_drop_approached": "got close to the building where the supplies were left ({place})",
     "supply_drop_entered": "went into the building where the supplies were left ({place})",
@@ -317,6 +324,21 @@ NOTE_TEXT = {
     "trade_accepted": "agreed to trade with {who} for {item}",
     "trade_completed": "{by} paid {who} and traded for {item}",
     "trade_failed": "backed out of a trade with {who} for {item}",
+    "donation": "sent supplies over to {who} to help their people ({item})",
+    "specialty_guard": "{who} sent a squad of soldiers to back them up",
+    "specialty_snipe_start": "{who} started covering them with a rifle from far away",
+    "specialty_snipe": "{who} shot {count} of the dead around them from a distance",
+    "specialty_doc": "{who} talked them through treating {count} injuries over the radio",
+    "specialty_dewey": "{who} said they were on the way to repair their vehicle",
+    "specialty_dewey_done": "{who} came by and repaired their vehicle",
+    "specialty_casey": "{who} scouted the area and marked the dangers on their map",
+    "specialty_ray": "{who} drove supplies over to {item} on their behalf",
+    "specialty_pike": "{who} prayed with them over the radio and calmed their fear",
+    "specialty_rats": "{who} made a racket far away to pull the dead off them",
+    "npc_dead": "heard over the radio that {who} had died",
+    "project_donation": "sent supplies to help {who} with their big project ({item})",
+    "project_done": "heard that {who} finished their big project ({item}) with the players' help",
+    "npc_gone": "{who} left for good and went off the air",
     # 이전 버전 세이브 호환
     "supply_offered": "heard that someone left supplies at {place}",
     "supply_approached": "got close to the building where the supplies were left ({place})",
@@ -366,6 +388,16 @@ def format_note(note: dict, lang: Any = None) -> str | None:
             return None
         who = ", ".join(clip(n, NAME_LIMIT) for n in as_list(note.get("with"))[:3] if n) or "a companion"
         return f'{clip(note.get("clock"), 5)} talked with {who}: ' + " / ".join(f'"{x}"' for x in spoken)
+    if kind == "letter_read":
+        writer = faction_label(note.get("faction"), lang) or "someone"
+        text = f"{clip(note.get('clock'), 5)} read a handwritten letter from {writer} that came with some supplies"
+        body = clip(note.get("text"), 300)
+        return text + (f': "{body}"' if body else "")
+    if kind == "broadcast_heard":
+        heard = [clip(line, 200) for line in as_list(note.get("lines"))[:4] if line]
+        host = faction_label(note.get("faction"), lang) or "someone"
+        text = f"{clip(note.get('clock'), 5)} listened to {host}'s evening news on the radio"
+        return text + (": " + " / ".join(f'"{x}"' for x in heard) if heard else "")
     template = NOTE_TEXT.get(kind)
     if not template:
         return None
@@ -545,6 +577,10 @@ DIRECTOR_EVENTS = {
     "extortion": "A hostile radio contact (one who barely trusts them) threatens the target: hand over specific items "
                  "within 36 hours or they will lure a horde or a helicopter onto them. Paying ends it with a small "
                  "payment. Rare; only when a relationship has gone sour.",
+    "npc_emergency": "A radio contact whose people have almost run out of something vital (see the contacts' "
+                     "situation) urgently asks the target for exactly that, with only one day to deliver once they agree. "
+                     "Same trust rules as npc_request. Strongly consider it when a contact is running out; it shows the "
+                     "world reacting to their hardship.",
     "fetch_item": "A radio contact asks the target to retrieve a sealed package from a building and report it "
                   "over the radio, for a supply reward. Same distance and reward scale as supply_drop. Gives a "
                   "bored or idle survivor a goal; fails if not delivered before the deadline.",
@@ -626,6 +662,17 @@ def build_director(payload: dict, mcfg: dict) -> LLMRequest:
         r = as_dict(r)
         lines.append(f"- day {as_int(r.get('day'))} {clip(r.get('clock'), 5)}: {clip(r.get('event'), 30)} "
                      f"(intensity {as_int(r.get('intensity'), 1)}) for {clip(r.get('target'), NAME_LIMIT)}")
+    world = [clip(x, 40) for x in as_list(payload.get("world"))[:4] if x]
+    if world:
+        lines.append("County conditions now: " + ", ".join(world) + ".")
+    npcs = [as_dict(n) for n in as_list(payload.get("npcs"))]
+    if npcs:
+        lines.append("Radio contacts' situation (their people's supplies, 0-100):")
+        for n in npcs:
+            f = FACTIONS.get(str(n.get("id")))
+            if not f:
+                continue
+            lines.append(f"- {f['name']} (trust {as_int(n.get('trust'))}): {life_state_words(n.get('state'))}")
     lines.append("Events you can choose now:")
     lines.extend(f"- {e}: {DIRECTOR_EVENTS[e]}" for e in events)
 
@@ -690,7 +737,8 @@ FACTIONS = {
         "who": "A sixteen-year-old ham radio operator broadcasting from their father's radio shack in Valley Station, "
                "north of West Point. Their father is sick in bed. Bright, nervous, talks fast, loves electronics and "
                "radio jargon, and is desperate for someone to talk to. Knows batteries, radios, generators and wiring. "
-               "Tries to sound older than they are.",
+               "Tries to sound older than they are. Reads a short evening news broadcast at 19:00 on 105.4 MHz "
+               "(\"Valley Station Evening News\"), replayed at 07:00, for anyone with a radio.",
         "trust": "Starts eager and friendly, but gets scared and closes up if anyone sounds threatening.",
         "speech": {"KO": "polite 해요체 toward adults, a bit breathless (~요, ~거든요, ~잖아요). Never banmal."},
         "trade_tiers": {
@@ -846,15 +894,23 @@ def format_trade_rules(trade: dict, fid: str = "") -> list[str]:
     lines.append("- What you can offer now (category up to tier): " +
                  ", ".join(f"{cat} up to {top}" for cat, top in goods))
     catalog = []
+    empty, short = [], []
     for c in as_list(trade.get("catalog")):
         c = as_dict(c)
         cat = str(c.get("category"))
         if cat in TRADE_TIERS:
             catalog.append((cat, max(0, as_int(c.get("maxTier"))), [as_int(n, 101) for n in as_list(c.get("needs"))]))
+            if c.get("empty"):
+                empty.append(cat)
+            elif c.get("short"):
+                short.append(cat)
     if catalog:
         # 취급하는 모든 등급을 보여 주고, 아직 못 주는 등급은 필요한 신뢰도와 함께 잠김으로 표시한다
         for cat, top, needs in catalog:
             names = special.get(cat, TRADE_TIERS[cat])
+            if cat in empty:
+                lines.append(f"  {cat}: none to spare right now, your own people are out of it")
+                continue
             tiers = []
             for i, need in enumerate(needs[:len(names)]):
                 if i + 1 <= top:
@@ -862,6 +918,12 @@ def format_trade_rules(trade: dict, fid: str = "") -> list[str]:
                 elif need <= 100:
                     tiers.append(f"{i + 1} = {names[i]} (locked: needs trust {need})")
             lines.append(f"  {cat}: " + "; ".join(tiers))
+        if empty:
+            lines.append("- If they ask for " + " or ".join(empty) + ", refuse (action \"refuse\") and say your own "
+                         "people are out of it; it has nothing to do with trust.")
+        if short:
+            lines.append("- You are short on " + ", ".join(short) + " yourself, so those cost more than usual "
+                         "(the game already raised the price).")
         never = [c for c in TRADE_CATEGORIES if c not in {cat for cat, _, _ in catalog}]
         if never:
             lines.append("- You never trade: " + ", ".join(never))
@@ -939,6 +1001,35 @@ def trust_word(trust: int) -> str:
 
 
 # 게임 Social.context: 이 NPC 의 이야기, 다른 NPC 에 대한 생각, 들은 소식
+# NPC 사이 관계 값(-3..3, 게임 Bonds.lua)을 말로. 관계표 메모는 처음 사이라 지금 마음이 우선
+BOND_WORDS = {
+    -3: "you can't stand them",
+    -2: "you dislike them",
+    -1: "you are wary of them",
+    0: "neither warm nor cold",
+    1: "you get along",
+    2: "you like them",
+    3: "they are a close friend",
+}
+
+
+def bond_line(o, subject="you"):
+    """관계 값·최근 변화 문구. subject 가 you 가 아니면 3인칭으로."""
+    parts = []
+    if o.get("bond") is not None:
+        b = max(-3, min(3, as_int(o.get("bond"), 0)))
+        word = BOND_WORDS[b]
+        if subject != "you":
+            word = (word.replace("you can't", "they can't").replace("you dislike", "they dislike")
+                    .replace("you are", "they are").replace("you get", "they get").replace("you like", "they like")
+                    .replace("they are a close friend", "a close friend"))
+        parts.append(f"feeling now: {word}")
+    shift = clip(o.get("shift"), 200)
+    if shift:
+        parts.append(f"what changed it lately: {shift}")
+    return "; ".join(parts)
+
+
 def format_story_context(story: Any) -> list[str]:
     story = as_dict(story)
     out = []
@@ -953,9 +1044,19 @@ def format_story_context(story: Any) -> list[str]:
         o = as_dict(o)
         f = FACTIONS.get(str(o.get("id")))
         note = clip(o.get("note"), 200)
-        if not f or not note:
+        bond = bond_line(o)
+        if not f or not (note or o.get("shift") or as_int(o.get("bond"), 0) != 0):
             continue
-        line = f"{f['name']}: {note}"
+        gone = str(o.get("gone") or "")
+        if gone in ("dead", "gone"):
+            # 죽었거나 떠난 사람: 지금 형편이나 신뢰도 대신 그 사실만
+            what = "died recently" if gone == "dead" else "left the county and is no longer on the radio"
+            others.append(f"- {f['name']}: {note or 'someone you knew on the radio'}; {f['name']} {what}. "
+                          "You still think about them.")
+            continue
+        line = f"{f['name']}: {note or 'you did not know them well at first'}"
+        if bond:
+            line += f"; {bond}"
         trust = as_int(o.get("trust"), -1)
         if trust >= 0:
             line += f"; how much they (not you) trust the players: {trust_word(trust)}"
@@ -964,11 +1065,144 @@ def format_story_context(story: Any) -> list[str]:
             line += f'; their situation lately, in their own words ("you" means them): {obeat}'
         others.append("- " + line)
     if others:
-        out.append("Other people on the radio you know (mention them when it comes up naturally):")
+        out.append("Other people on the radio you know (mention them when it comes up naturally; "
+                   "if your feeling now differs from how things started, the feeling now is what counts):")
         out.extend(others)
     news = [clip(x, 300) for x in as_list(story.get("news"))[-3:] if x]
     if news:
         out.append("Things you have heard lately: " + " ".join(news))
+    return out
+
+
+# 게임 Life.context: 이 NPC 무리의 형편(생활 자원), 플레이어들과 있었던 일, 평판
+LIFE_RESOURCES = [("food", "food and water"), ("medical", "medicine"), ("safety", "ammunition and defenses"),
+                  ("morale", "morale")]
+
+
+def life_level(v: int) -> str:
+    if v < 20:
+        return "none left" if v < 10 else "almost gone"
+    if v < 40:
+        return "running low"
+    if v < 70:
+        return "enough for now"
+    return "plenty"
+
+
+RECORD_TEXT = {
+    "player_died": "you heard that {who} died",
+    "quest_completed": "{who} did what you asked",
+    "quest_failed": "{who} promised to help and never did",
+    "quest_declined": "{who} turned down your request",
+    "quest_ignored": "nobody answered your request",
+    "quest_accepted": "{who} agreed to help you",
+    "trade_done": "{who} completed a trade with you",
+    "trade_failed": "{who} backed out of a trade with you",
+    "crisis_helped": "{who} chose to help you when several people needed help",
+    "crisis_snubbed": "{who} chose to help someone else instead of you in a crisis",
+    "crisis_ignored": "nobody answered when you asked for help in a crisis",
+    "donation": "{who} sent your people supplies without being asked",
+    "insult": "{who} was rude to you on the radio",
+    "spill_up": "{who} helped {src}, whom you like",
+    "spill_down": "{who} helped {src}, whom you do not like",
+    "rescued": "you sent armed people to back {who} up when they were in danger",
+    "specialty": "you used your special skills to help {who}",
+    "ray_supply": "{who} had Ray Mercer bring your people supplies",
+    "survived": "you came close to the end and barely survived",
+    "project_gift": "{who} sent supplies for your big project",
+    "project_done": "you finished your big project with the players' help",
+}
+TAG_TEXT = {
+    "reliable": "someone you can count on",
+    "healer": "the one who brings medicine",
+    "abandoner": "the ones who left you when it mattered",
+    "unreliable": "someone who does not keep promises",
+    "generous": "generous",
+    "vic_friend": "someone who runs with Vic's crew",
+}
+
+
+def life_state_words(state: Any) -> str:
+    state = as_dict(state)
+    parts = []
+    for key, word in LIFE_RESOURCES:
+        if key in state:
+            v = max(0, min(100, as_int(state.get(key))))
+            parts.append(f"{word} {life_level(v)} ({v}/100)")
+    return ", ".join(parts)
+
+
+def format_newcomer(info: Any) -> list[str]:
+    """이 NPC 에게 처음 말을 거는 캐릭터 (Legacy.lua): 함께 다니는 사람들, 최근 이 무리에서 죽은 사람."""
+    info = as_dict(info)
+    name = clip(info.get("name"), NAME_LIMIT)
+    if not name:
+        return []
+    out = [f"{name} is a voice you have never heard before on this channel. The trust you have is with the players' "
+           "group as a whole, so treat them as part of it, but notice that they are new to you."]
+    companions = [clip(c, NAME_LIMIT) for c in as_list(info.get("companions"))[:3] if c]
+    if companions:
+        out.append(f"{name} travels with the same group as " + ", ".join(companions) + ".")
+    dead = []
+    for d in as_list(info.get("dead"))[:3]:
+        d = as_dict(d)
+        who = clip(d.get("name"), NAME_LIMIT)
+        if not who:
+            continue
+        ago = as_int(d.get("daysAgo"))
+        when = "today" if ago <= 0 else ("yesterday" if ago == 1 else f"{ago} days ago")
+        line = f"{who} died {when}"
+        what = clip(d.get("what"), 300)
+        if d.get("knew") and what:
+            line += f" (between {who} and you: {what})"
+        elif not d.get("knew"):
+            line += " (you never really dealt with them)"
+        dead.append(line)
+    if dead:
+        out.append("The group lost people recently: " + "; ".join(dead) + ". You may wonder aloud whether this new voice "
+                   "knew them or is taking their place, if it fits naturally. Do not invent how they died.")
+    return out
+
+
+def format_life_context(life: Any) -> list[str]:
+    life = as_dict(life)
+    out = []
+    words = life_state_words(life.get("state"))
+    if words:
+        out.append(f"How your people are doing right now: {words}. Let this show in how you sound and what you "
+                   "worry about, without reciting numbers.")
+    records = []
+    for r in as_list(life.get("records"))[-6:]:
+        r = as_dict(r)
+        template = RECORD_TEXT.get(str(r.get("kind")))
+        if not template:
+            continue
+        src = FACTIONS.get(str(r.get("src")), {}).get("name", "someone")
+        line = template.format(who=clip(r.get("who"), NAME_LIMIT) or "one of them", src=src)
+        if r.get("dead") and r.get("kind") != "player_died":
+            line += f" ({clip(r.get('who'), NAME_LIMIT)} is dead now)"
+        d = as_int(r.get("d"))
+        records.append(f"- day {as_int(r.get('day'))}: {line}" + (f" (trust {d:+d})" if d else ""))
+    if records:
+        out.append("What has happened between you and these players (oldest first; bring it up when it fits, "
+                   "you remember it):")
+        out.extend(records)
+    project = as_dict(life.get("project"))
+    pname = clip(project.get("name"), 120)
+    if pname:
+        if project.get("done"):
+            out.append(f"Your big project, {pname}, is finished thanks to the players. You are proud of it.")
+        else:
+            goal = as_int(project.get("goal"), 100) or 100
+            pct = as_int(project.get("percent"), -1)
+            if pct < 0:
+                pct = as_int(project.get("points")) * 100 // goal
+            pct = max(0, min(100, pct))
+            out.append(f"Your big project: {pname}, about {pct}% done"
+                       + (" (the players have been helping)." if pct > 0 else " (not started yet)."))
+    tags = [TAG_TEXT[t] for t in as_list(life.get("tags")) if t in TAG_TEXT]
+    if tags:
+        out.append("How you think of them by now: " + "; ".join(tags) + ".")
     return out
 
 
@@ -1003,6 +1237,8 @@ def build_radio(payload: dict, mcfg: dict) -> LLMRequest:
     if memory:
         persona.append(f"What you remember from earlier talks: {memory}")
     persona.extend(format_story_context(payload.get("story")))
+    persona.extend(format_life_context(payload.get("life")))
+    persona.extend(format_newcomer(payload.get("newcomer")))
 
     lines = [
         f"Language: {language_name(code)}",
@@ -1270,12 +1506,21 @@ def build_radio_scene(payload: dict, mcfg: dict) -> LLMRequest:
         speech = f.get("speech", {}).get(code)
         if speech:
             bits.append(f"Speech level, always the same: {speech}")
+        words = life_state_words(x.get("state"))
+        if words:
+            bits.append(f"Their people right now: {words}.")
         rels = []
         for r in as_list(x.get("relations"))[:3]:
             r = as_dict(r)
             other = FACTIONS.get(str(r.get("id")))
-            if other and r.get("note"):
-                rels.append(f"about {other['name']}: {clip(r.get('note'), 200)}")
+            if not other:
+                continue
+            bits_r = [clip(r.get("note"), 200)] if r.get("note") else []
+            bond = bond_line(r, subject="they")
+            if bond:
+                bits_r.append(bond)
+            if bits_r:
+                rels.append(f"about {other['name']}: " + ", ".join(bits_r))
         if rels:
             bits.append("What they think of the others here: " + "; ".join(rels) + ".")
         lines.append(" ".join(bits))
@@ -1449,8 +1694,131 @@ def build_banter(payload: dict, mcfg: dict) -> LLMRequest:
     )
 
 
+# ---------------------------------------------------------------- broadcast
+
+MAX_BROADCAST_LINES = 10
+MAX_BROADCAST_FACTS = 12
+BROADCAST_STATION = "Valley Station Evening News"
+
+
+def build_broadcast(payload: dict, mcfg: dict) -> LLMRequest:
+    """게임 속 라디오 저녁 방송 (Broadcast.lua). 진행자 한 명이 6~10줄."""
+    code = str(payload.get("lang") or "EN").upper()
+    host = str(payload.get("host"))
+    f = FACTIONS.get(host)
+    if not f:
+        raise ModuleError("bad_payload")
+    local = f["local"].get(code, "")
+    name = f"{f['name']} ({local})" if local else f["name"]
+    freq = clip(payload.get("freq"), 8) or "105.4"
+    lines = [
+        f"Language: {language_name(code)}",
+        f'Station: "{BROADCAST_STATION}", {freq} MHz. Day {as_int(payload.get("day"))} after the outbreak, '
+        f"{clip(payload.get('clock'), 5) or '19:00'}.",
+        f"Host: {name}. {f['who']}",
+    ]
+    speech = f.get("speech", {}).get(code)
+    if speech:
+        lines.append(f"Host's speech level, always the same: {speech}")
+    if host != "casey":
+        lines.append("The usual host, Casey, is no longer on the air; this person keeps the broadcast going.")
+    beat = clip(payload.get("beat"), 300)
+    if beat:
+        lines.append("What is going on in the host's own life (\"you\" means the host): " + beat)
+    facts = [clip(x, 300) for x in as_list(payload.get("facts"))[:MAX_BROADCAST_FACTS] if x]
+    if facts:
+        lines.append("Today's news (facts, newest first):")
+        lines.extend(f"- {x}" for x in facts)
+    else:
+        lines.append("Today's news: nothing new reached the host today.")
+    conditions = [clip(x, 40) for x in as_list(payload.get("conditions"))[:4] if x]
+    if conditions:
+        lines.append("Life in the county now: " + ", ".join(conditions) + ".")
+    weather = clip(payload.get("weather"), 200)
+    lines.append(f"Weather forecast: {weather}" if weather else "Weather forecast: unknown, the host's barometer is acting up.")
+    lines.append(f"Write 6 to {MAX_BROADCAST_LINES} lines and the rerun line. Speak only {language_name(code)}.")
+    schema = {
+        "type": "object",
+        "properties": {
+            "lines": {"type": "array", "items": {"type": "string"}},
+            "rerun": {"type": "string"},
+        },
+        "required": ["lines", "rerun"],
+        "additionalProperties": False,
+    }
+    return LLMRequest(
+        module="broadcast",
+        model=str(mcfg.get("model", "mock")),
+        system=load_prompt("broadcast"),
+        messages=[{"role": "user", "content": "\n".join(lines)}],
+        max_tokens=int(mcfg.get("max_tokens", 4000)),
+        effort=mcfg.get("effort"),
+        json_schema=schema,
+    )
+
+
+# ---------------------------------------------------------------- letter
+
+LETTER_REASONS = {
+    "gift": "You are leaving a small package of supplies for them as a gift, and tucking this note inside.",
+    "greenhouse": "Your greenhouse gave its first real harvest thanks to the players' help, and you are sending some of it "
+                  "with this note.",
+    "project": "Your big project ({extra}) is finally finished, and the players' help made it possible. You want to thank "
+               "them properly, in writing.",
+    "farewell": "You are leaving for good and will not be on the radio again ({extra}). This is your last letter to them, "
+                "passed along with someone else's supplies.",
+}
+
+
+def build_letter(payload: dict, mcfg: dict) -> LLMRequest:
+    """NPC 가 보급품에 넣는 손편지 (Letters.lua)."""
+    code = str(payload.get("lang") or "EN").upper()
+    fid = str(payload.get("faction"))
+    f = FACTIONS.get(fid)
+    reason = str(payload.get("reason"))
+    if not f or reason not in LETTER_REASONS:
+        raise ModuleError("bad_payload")
+    local = f["local"].get(code, "")
+    name = f"{f['name']} ({local})" if local else f["name"]
+    lines = [
+        f"Language: {language_name(code)}",
+        f"Writer: {name}. {f['who']}",
+    ]
+    speech = f.get("speech", {}).get(code)
+    if speech:
+        lines.append(f"Writer's speech level, always the same, also in writing: {speech}")
+    trust = max(0, min(100, as_int(payload.get("trust"), 50)))
+    lines.append(f"Toward the players the writer {trust_attitude(trust)}.")
+    memory = clip(payload.get("memory"), 1000)
+    if memory:
+        lines.append(f"What the writer remembers from radio talks with the players: {memory}")
+    lines.extend(format_story_context(payload.get("story")))
+    lines.extend(format_life_context(payload.get("life")))
+    to = clip(payload.get("to"), NAME_LIMIT) or "the players"
+    lines.append(f"Reader: {to}, one of the players.")
+    lines.append("Why you are writing: " + LETTER_REASONS[reason].format(extra=clip(payload.get("extra"), 300) or "?"))
+    lines.append(f"Write the letter now. Speak only {language_name(code)}.")
+    schema = {
+        "type": "object",
+        "properties": {"title": {"type": "string"}, "text": {"type": "string"}},
+        "required": ["title", "text"],
+        "additionalProperties": False,
+    }
+    return LLMRequest(
+        module="letter",
+        model=str(mcfg.get("model", "mock")),
+        system=load_prompt("letter"),
+        messages=[{"role": "user", "content": chr(10).join(lines)}],
+        max_tokens=int(mcfg.get("max_tokens", 4000)),
+        effort=mcfg.get("effort"),
+        json_schema=schema,
+    )
+
+
 BUILDERS = {
     "debug": build_debug,
+    "letter": build_letter,
+    "broadcast": build_broadcast,
     "journal": build_journal,
     "banter": build_banter,
     "radio_scene": build_radio_scene,

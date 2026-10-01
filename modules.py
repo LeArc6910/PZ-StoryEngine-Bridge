@@ -398,6 +398,10 @@ def format_note(note: dict, lang: Any = None) -> str | None:
         host = faction_label(note.get("faction"), lang) or "someone"
         text = f"{clip(note.get('clock'), 5)} listened to {host}'s evening news on the radio"
         return text + (": " + " / ".join(f'"{x}"' for x in heard) if heard else "")
+    if kind == "op":
+        # 복구 작전 소식 (게임이 영어 문장을 만들어 보낸다, Ops.lua)
+        text = clip(note.get("text"), 400)
+        return f"{clip(note.get('clock'), 5)} {text}".strip() if text else None
     template = NOTE_TEXT.get(kind)
     if not template:
         return None
@@ -1112,6 +1116,8 @@ RECORD_TEXT = {
     "survived": "you came close to the end and barely survived",
     "project_gift": "{who} sent supplies for your big project",
     "project_done": "you finished your big project with the players' help",
+    "operation_done": "the players got the county's power or running water working again",
+    "saga_saved": "the players helped your people get through a disaster that hit the county",
 }
 TAG_TEXT = {
     "reliable": "someone you can count on",

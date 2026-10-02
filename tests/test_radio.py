@@ -144,6 +144,14 @@ class RadioModuleTest(unittest.TestCase):
         self.assertIn("(medical, tools)", text)
         self.assertIn('action "counter"', text)
         self.assertNotIn("What you can offer now", text)
+        self.assertIn("Your words alone never change this deal", text)
+        self.assertIn("You have nothing else to swap in right now", text)
+
+        swap = dict(trade, goods=[{"category": "melee", "maxTier": 2}, {"category": "bogus", "maxTier": 3}])
+        text = self.build({**PAYLOAD, "faction": "ray", "lang": "EN", "trade": swap}).messages[0]["content"]
+        self.assertIn("If they want different goods instead, you may swap them", text)
+        self.assertIn("melee up to tier 2 (1 = ", text)
+        self.assertNotIn("bogus", text)
 
         done = dict(trade, haggleLeft=0)
         text = self.build({**PAYLOAD, "faction": "ray", "lang": "EN", "trade": done}).messages[0]["content"]

@@ -62,6 +62,7 @@ class GeminiProviderTest(unittest.TestCase):
         self.assertEqual(cfg.thinking_config.thinking_level, types.ThinkingLevel.HIGH)
         self.assertEqual(res.json, {"reply": "Sure."})
         self.assertEqual(res.model, "gemini-3.8-flash-001")
+        self.assertTrue(cfg.automatic_function_calling.disable)
 
     def test_effort_mapping_and_thinking_off(self):
         p = provider(FakeModels())
@@ -89,6 +90,11 @@ class GeminiProviderTest(unittest.TestCase):
             with self.assertRaises(ProviderError) as e:
                 provider(FakeModels(error=err)).complete(request())
             self.assertEqual(e.exception.code, code, status)
+        bad_key = errors.APIError(400, {"error": {"code": 400, "message": "API key not valid. Please pass a valid API key.",
+                                                  "status": "INVALID_ARGUMENT"}})
+        with self.assertRaises(ProviderError) as e:
+            provider(FakeModels(error=bad_key)).complete(request())
+        self.assertEqual(e.exception.code, "auth")
         with self.assertRaises(ProviderError) as e:
             provider(FakeModels(error=ConnectionError("down"))).complete(request())
         self.assertEqual(e.exception.code, "network")

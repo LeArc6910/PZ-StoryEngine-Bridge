@@ -847,9 +847,18 @@ def format_haggle_rules(trade: dict, fid: str = "") -> list[str]:
         "Trading rules (from the game, you must follow them):",
         f"- You already offered them {tier_name(fid, cat, tier)} ({cat}, tier {tier}) for payment in {pay} "
         f"worth {price} value points{first}. They have not accepted or declined yet.",
-        "- Make no new offer until this deal is settled. If they ask for something else, tell them to settle this "
-        "one first.",
+        "- Your words alone never change this deal. If you agree to change anything (price, payment or goods), put "
+        "it in \"trade\" with action \"counter\"; if you do not, say plainly that the terms stay as they are.",
     ]
+    # 흥정 중에 물건을 바꿔 줄 수 있는 품목·등급 (게임이 Trade.negotiate 에서 다시 검증하고 값을 새로 매긴다)
+    swaps = []
+    for g in as_list(trade.get("goods")):
+        g = as_dict(g)
+        gcat = str(g.get("category"))
+        top = max(0, min(5, as_int(g.get("maxTier"))))
+        if gcat in TRADE_TIERS and top > 0:
+            swaps.append(f"{gcat} up to tier {top} ("
+                         + "; ".join(f"{t} = {tier_name(fid, gcat, t)}" for t in range(1, top + 1)) + ")")
     if left > 0:
         lines += [
             f"- They may haggle: ask for a lower price, or offer to pay in another category you accept "
@@ -858,9 +867,19 @@ def format_haggle_rules(trade: dict, fid: str = "") -> list[str]:
             "- Decide in character how far you move: take their price if it is at or above your lowest, meet them "
             "halfway, or hold firm. Give ground step by step over the rounds; do not drop straight to your lowest "
             "price, least of all for an insulting offer. To change the terms use action \"counter\" with the new \"price\" and "
-            "\"pay_category\" (keep the deal's category and tier). To keep the terms use action \"none\".",
+            "\"pay_category\" (keep the deal's category and tier unless you swap goods). To keep the terms use action \"none\".",
             "- While haggling you may say the price in your reply.",
         ]
+        if swaps:
+            lines += [
+                "- If they want different goods instead, you may swap them: action \"counter\" with the new "
+                "\"category\" and \"tier\" (the game rolls the new goods and sets a fresh price, so put \"price\" 0). "
+                "You can swap to: " + " | ".join(swaps) + ".",
+                "- Anything not in that list you cannot give in this deal; say so instead of agreeing.",
+            ]
+        else:
+            lines.append("- You have nothing else to swap in right now. If they want different goods, say so; the "
+                         "goods stay the same.")
     else:
         lines.append("- No more haggling: you have moved as far as you will. Keep the terms (action \"none\"), "
                      "or call off the deal (action \"withdraw\") if they keep pushing.")
@@ -1484,6 +1503,76 @@ def build_summary(payload: dict, mcfg: dict) -> LLMRequest:
 MAX_SCENE_LINES = 6
 
 
+MARKET_MAX = 3
+
+
+def format_market(payload: dict, code: str, ids: list[str], lines: list[str]) -> tuple[list[str], list[str]]:
+    """공용 주파수 거래: 플레이어가 물건을 청했을 때 제안할 수 있는 사람들. (제안할 수 있는 id, 말할 수 있는 id)"""
+    market = as_dict(payload.get("market"))
+    said = as_dict(payload.get("said"))
+    speakers = list(ids)
+    if not said.get("text") or not market:
+        return [], speakers
+    if market.get("closed"):
+        why = ("they already have a trade going and must settle it first"
+               if market.get("closed") == "open_deal" else "nobody can spare anything right now")
+        lines.append(f"Trading on this channel: if the player is asking for goods, nobody makes an offer now ({why}); "
+                     "say so in character.")
+        return [], speakers
+    sellers = []
+    top = max(1, min(MARKET_MAX, as_int(market.get("max"), MARKET_MAX)))
+    lines.append(f"Trading on this channel (rules from the game): if the player is asking for goods or a trade, up to {top} "
+                 "of the people below may each make one offer. Each offer is one category, at most the tier listed, and "
+                 "asks for payment in one category that person accepts. Those who offer say so briefly in their own line "
+                 "(plain words, no numbers; the exact goods and price are shown to the player). Choose who offers by what "
+                 "the player asked for and how each person feels about the players. If the player is not asking for "
+                 "goods, make no offers.")
+    stock = {c: as_int(v) for c, v in as_dict(market.get("stock")).items() if c in TRADE_CATEGORIES and as_int(v) > 0}
+    if stock:
+        # 판매 시장: 플레이어가 가진 물건을 내놓으면 그것을 받는 사람들이 자기 물건을 제안한다 (게임이 값을 정한다)
+        lines.append("What the player has to trade away (category: total value): "
+                     + ", ".join(f"{c}: {v}" for c, v in stock.items()) + ".")
+        lines.append("Selling: if the player is offering to sell or give up goods of one of those categories (\"anyone need "
+                     "food?\", \"I have spare bandages\"), set \"selling\" to that category. Then only people who accept that "
+                     "category make offers, every offer's pay_category is that category, and each offer is what that person "
+                     "gives in return. People short of it are glad and pay more (the game sets the rate). If the player is "
+                     "asking for goods rather than offering them, \"selling\" is \"none\".")
+    lines.append("People who can trade now:")
+    for x in as_list(market.get("sellers")):
+        x = as_dict(x)
+        fid = str(x.get("id"))
+        if fid not in FACTIONS:
+            continue
+        goods = []
+        for g in as_list(x.get("goods")):
+            g = as_dict(g)
+            cat = str(g.get("category"))
+            t = max(0, min(5, as_int(g.get("maxTier"))))
+            if cat in TRADE_TIERS and t > 0:
+                goods.append(f"{cat} up to {t} ({tier_name(fid, cat, t)})")
+        wants = [w for w in as_list(x.get("wants")) if w in TRADE_CATEGORIES]
+        short = [w for w in as_list(x.get("short")) if w in wants]
+        if not goods or not wants:
+            continue
+        sellers.append(fid)
+        f = FACTIONS[fid]
+        local = f["local"].get(code, "")
+        name = f"{f['name']} ({local})" if local else f["name"]
+        extra = ""
+        if fid not in ids:
+            # 장면 참가자가 아닌 사람은 제안할 때만 말한다
+            speech = f.get("speech", {}).get(code)
+            extra = (f" Not in the conversation so far: speaks only if they make an offer. {f['who']}"
+                     + (f" Speech level, always the same: {speech}" if speech else "")
+                     + f" Toward the players this person {trust_attitude(max(0, min(100, as_int(x.get('trust'), 30))))}.")
+            speakers.append(fid)
+        need = f" Short of {', '.join(short)} themselves." if short else ""
+        lines.append(f"- {fid} = {name}: can offer {'; '.join(goods)}; accepts payment in {', '.join(wants)}.{need}{extra}")
+    if not sellers:
+        return [], list(ids)
+    return sellers, speakers
+
+
 def build_radio_scene(payload: dict, mcfg: dict) -> LLMRequest:
     code = str(payload.get("lang") or "EN").upper()
     parts = []
@@ -1534,6 +1623,7 @@ def build_radio_scene(payload: dict, mcfg: dict) -> LLMRequest:
     players = [clip(pl, NAME_LIMIT) for pl in as_list(payload.get("players"))[:MAX_PLAYERS] if pl]
     if players:
         lines.append("Players listening: " + ", ".join(players))
+    sellers, speakers = format_market(payload, code, ids, lines)
     lines.append("Recent talk on the open channel (oldest first):")
     log = as_list(payload.get("log"))[-12:]
     for m in log:
@@ -1567,7 +1657,7 @@ def build_radio_scene(payload: dict, mcfg: dict) -> LLMRequest:
                 "type": "array",
                 "items": {
                     "type": "object",
-                    "properties": {"speaker": {"type": "string", "enum": ids}, "text": {"type": "string"}},
+                    "properties": {"speaker": {"type": "string", "enum": speakers}, "text": {"type": "string"}},
                     "required": ["speaker", "text"],
                     "additionalProperties": False,
                 },
@@ -1576,6 +1666,24 @@ def build_radio_scene(payload: dict, mcfg: dict) -> LLMRequest:
         "required": ["lines"],
         "additionalProperties": False,
     }
+    if sellers:
+        # 공용 주파수 거래: 게임(Trade.marketOffers)이 신뢰도 한도·생활 자원으로 다시 검증하고 물건·값을 정한다
+        schema["properties"]["offers"] = {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "faction": {"type": "string", "enum": sellers},
+                    "category": {"type": "string", "enum": TRADE_CATEGORIES},
+                    "tier": {"type": "integer"},
+                    "pay_category": {"type": "string", "enum": TRADE_CATEGORIES},
+                },
+                "required": ["faction", "category", "tier", "pay_category"],
+                "additionalProperties": False,
+            },
+        }
+        schema["properties"]["selling"] = {"type": "string", "enum": ["none"] + TRADE_CATEGORIES}
+        schema["required"] = ["lines", "offers", "selling"]
     return LLMRequest(
         module="radio_scene",
         model=str(mcfg.get("model", "mock")),

@@ -98,6 +98,44 @@ class SocialTest(unittest.TestCase):
         self.assertIn("What they talk about now: They catch up.", topic.messages[0]["content"])
         with self.assertRaises(ModuleError):
             build_request("radio_scene", dict(payload, participants=[{"id": "ray"}]), {"model": "m"})
+        self.assertNotIn("offers", req.json_schema["properties"])
+
+    def test_scene_market(self):
+        payload = {"lang": "EN", "day": 4, "clock": "19:00", "players": ["Minsu"],
+                   "participants": [{"id": "ray", "trust": 70}, {"id": "casey", "trust": 40}],
+                   "log": [], "said": {"name": "Minsu", "text": "anyone got food?"},
+                   "market": {"max": 3, "sellers": [
+                       {"id": "ray", "trust": 70, "goods": [{"category": "food", "maxTier": 4}],
+                        "wants": ["medical", "tools"]},
+                       {"id": "doc", "trust": 50, "goods": [{"category": "medical", "maxTier": 3}],
+                        "wants": ["food", "bogus"]},
+                       {"id": "nobody", "goods": [{"category": "food", "maxTier": 1}], "wants": ["food"]}]}}
+        req = build_request("radio_scene", payload, {"model": "m"})
+        text = req.messages[0]["content"]
+        self.assertIn("Trading on this channel (rules from the game)", text)
+        self.assertIn("- ray = Ray Mercer: can offer food up to 4", text)
+        self.assertIn("accepts payment in medical, tools.", text)
+        self.assertIn("- doc = ", text)
+        self.assertIn("Not in the conversation so far: speaks only if they make an offer.", text)
+        props = req.json_schema["properties"]
+        self.assertEqual(props["offers"]["items"]["properties"]["faction"]["enum"], ["ray", "doc"])
+        self.assertEqual(props["lines"]["items"]["properties"]["speaker"]["enum"], ["ray", "casey", "doc"])
+        self.assertEqual(req.json_schema["required"], ["lines", "offers", "selling"])
+        self.assertNotIn("What the player has to trade away", text)
+        # 판매 시장: 가진 물건과 모자란 품목을 알려 준다
+        sell = dict(payload, market=dict(payload["market"], stock={"food": 24, "ammo": 0, "bogus": 9}))
+        sell["market"]["sellers"] = [dict(payload["market"]["sellers"][0], short=["medical", "food"])] + payload["market"]["sellers"][1:]
+        stext = build_request("radio_scene", sell, {"model": "m"}).messages[0]["content"]
+        self.assertIn("What the player has to trade away (category: total value): food: 24.", stext)
+        self.assertIn('set "selling" to that category', stext)
+        self.assertIn("Short of medical themselves.", stext)
+        # 진행 중인 거래가 있으면 제안 없이 그렇다고 말한다
+        closed = build_request("radio_scene", dict(payload, market={"closed": "open_deal"}), {"model": "m"})
+        self.assertIn("nobody makes an offer now (they already have a trade going", closed.messages[0]["content"])
+        self.assertNotIn("offers", closed.json_schema["properties"])
+        # 예약 장면(플레이어가 말하지 않음)에는 시장이 없다
+        quiet = build_request("radio_scene", dict(payload, said=None, topic="weather"), {"model": "m"})
+        self.assertNotIn("Trading on this channel", quiet.messages[0]["content"])
 
 
 if __name__ == "__main__":

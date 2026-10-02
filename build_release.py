@@ -1,6 +1,6 @@
 """브릿지 배포판(Windows exe) 만들기.
 
-필요: pip install pyinstaller openai anthropic
+필요: pip install pyinstaller openai anthropic google-genai
 실행: python build_release.py
 결과: ../release/StoryEngineBridge-<버전>-win64.zip (+ SHA256)
 
@@ -29,10 +29,10 @@ def version() -> str:
 
 
 def notices() -> str:
-    """번들에 들어간 파이썬 패키지(openai, anthropic 과 그 의존성)의 이름·버전·라이선스 목록."""
+    """번들에 들어간 파이썬 패키지(openai, anthropic, google-genai 와 그 의존성)의 이름·버전·라이선스 목록."""
     import importlib.metadata as md
     import re
-    seen, queue, rows = set(), ["openai", "anthropic"], []
+    seen, queue, rows = set(), ["openai", "anthropic", "google-genai"], []
     while queue:
         name = queue.pop(0)
         key = name.lower().replace("_", "-")
@@ -73,11 +73,11 @@ def main() -> int:
     except ImportError:
         print("PyInstaller is not installed: pip install pyinstaller")
         return 1
-    for sdk in ("openai", "anthropic"):
+    for sdk, pkg in (("openai", "openai"), ("anthropic", "anthropic"), ("google.genai", "google-genai")):
         try:
             __import__(sdk)
         except ImportError:
-            print(f"{sdk} SDK is not installed: pip install {sdk}")
+            print(f"{pkg} SDK is not installed: pip install {pkg}")
             return 1
 
     ver = version()
@@ -95,6 +95,8 @@ def main() -> int:
         "--hidden-import", "providers.mock",
         "--hidden-import", "providers.openai_provider",
         "--hidden-import", "providers.anthropic_provider",
+        "--hidden-import", "providers.gemini_provider",
+        "--collect-submodules", "google.genai",
         "--paths", str(HERE),
         "--distpath", str(dist),
         "--workpath", str(build / "work"),

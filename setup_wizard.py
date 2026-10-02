@@ -1,7 +1,7 @@
 """처음 실행할 때 config.toml 을 만드는 설정 마법사 (배포판용).
 
 API 키는 이 PC 의 config.toml 에만 저장되고 다른 곳으로 보내지 않는다. 비워 두면 환경 변수
-(OPENAI_API_KEY / ANTHROPIC_API_KEY)를 쓴다.
+(OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY)를 쓴다.
 """
 
 from __future__ import annotations
@@ -12,7 +12,8 @@ from pathlib import Path
 PROVIDERS = {
     "1": ("openai", "OpenAI", "gpt-6-luna", "OPENAI_API_KEY"),
     "2": ("anthropic", "Anthropic (Claude)", "claude-haiku-4-5", "ANTHROPIC_API_KEY"),
-    "3": ("mock", "Test mode (no AI, no cost) / 테스트 모드 (AI 없음, 비용 없음)", "mock", ""),
+    "3": ("gemini", "Google Gemini", "gemini-3.8-flash", "GEMINI_API_KEY"),
+    "4": ("mock", "Test mode (no AI, no cost) / 테스트 모드 (AI 없음, 비용 없음)", "mock", ""),
 }
 MODULES = ("debug", "journal", "director", "radio", "monologue", "summary")
 
@@ -71,7 +72,7 @@ def run_setup(config_path: Path, default_data_dir: Path) -> bool:
     print()
     for key, (_, label, model, _) in PROVIDERS.items():
         print(f"  {key}) {label}" + (f"  [default model: {model}]" if model != "mock" else ""))
-    choice = _ask("Choose 1-3 / 선택 (1-3) [1]: ", "1")
+    choice = _ask(f"Choose 1-{len(PROVIDERS)} / 선택 (1-{len(PROVIDERS)}) [1]: ", "1")
     if choice not in PROVIDERS:
         print("Unknown choice. / 알 수 없는 선택입니다.")
         return False

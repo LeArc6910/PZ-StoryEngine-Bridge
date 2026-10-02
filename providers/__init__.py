@@ -31,4 +31,7 @@ def create_provider(name: str, cfg: dict):
     if name == "openai":
         from .openai_provider import OpenAIProvider
         return OpenAIProvider(cfg)
+    if name == "gemini":
+        from .gemini_provider import GeminiProvider
+        return GeminiProvider(cfg)
     raise ProviderError("unknown_provider", name)

@@ -6,8 +6,8 @@ It connects the mod's AI features — radio conversations and calls from contact
 
 Unofficial fan project, not affiliated with The Indie Stone, OpenAI or Anthropic. 한국어 안내: [release_docs/README_KO.md](release_docs/README_KO.md)
 
-- Mod: https://steamcommunity.com/sharedfiles/filedetails/?id=3808950035 (source: https://github.com/skditjdqja12/PZ-StoryEngine)
-- Download (Windows): [Releases](https://github.com/skditjdqja12/PZ-StoryEngine-Bridge/releases/latest)
+- Mod: https://steamcommunity.com/sharedfiles/filedetails/?id=3808950035 (source: https://github.com/LeArc6910/PZ-StoryEngine)
+- Download (Windows): [Releases](https://github.com/LeArc6910/PZ-StoryEngine-Bridge/releases/latest)
 
 ## For players
 

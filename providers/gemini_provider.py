@@ -41,7 +41,9 @@ class GeminiProvider:
         self.use_thinking = bool(cfg.get("thinking", True))
 
     def config_for(self, req) -> types.GenerateContentConfig:
-        params: dict = {"system_instruction": req.system, "max_output_tokens": req.max_tokens}
+        # 도구를 쓰지 않으므로 자동 함수 호출(AFC)은 끈다 (켜 두면 매 요청 로그에 안내가 찍힌다)
+        params: dict = {"system_instruction": req.system, "max_output_tokens": req.max_tokens,
+                        "automatic_function_calling": types.AutomaticFunctionCallingConfig(disable=True)}
         level = EFFORT_LEVELS.get(str(req.effort or "").lower())
         if level and self.use_thinking:
             params["thinking_config"] = types.ThinkingConfig(thinking_level=level)
@@ -65,7 +67,8 @@ class GeminiProvider:
         except errors.APIError as e:
             code = getattr(e, "code", 0) or 0
             message = getattr(e, "message", None) or str(e)
-            if code in (401, 403) and "API key" in message:
+            # 틀린 키는 400 "API key not valid" 로 온다
+            if code in (400, 401, 403) and "api key" in message.lower():
                 raise ProviderError("auth", "API 키를 확인하세요") from e
             if code == 403:
                 raise ProviderError("permission", message) from e

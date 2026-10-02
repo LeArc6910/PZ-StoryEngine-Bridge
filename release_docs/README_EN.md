@@ -2,7 +2,7 @@
 
 Optional companion program for the **StoryEngine** Project Zomboid mod (Build 42.20+).
 It lets the mod's AI features (radio conversations, AI director, journal, monologue) talk to an AI service
-using **your own API key**. Unofficial fan project, not affiliated with The Indie Stone, OpenAI or Anthropic.
+using **your own API key**. Unofficial fan project, not affiliated with The Indie Stone, OpenAI, Anthropic or Google.
 
 The mod works without the bridge (rule-based events and prepared lines). The bridge only adds AI-written text and decisions.
 
@@ -15,7 +15,7 @@ The mod works without the bridge (rule-based events and prepared lines). The bri
 
 1. Unzip the folder anywhere (for example `Documents\StoryEngineBridge`).
 2. Run `StoryEngineBridge.exe`. The first time, a setup wizard asks for:
-   - the AI service: OpenAI, Anthropic (Claude), or Test mode (no AI, no cost)
+   - the AI service: OpenAI, Anthropic (Claude), Google Gemini, or Test mode (no AI, no cost)
    - your API key (input is hidden; it is saved only in `config.toml` next to the exe)
    - the game data folder (the default `%USERPROFILE%\Zomboid\Lua\StoryEngine` is right for single player and in-game hosting)
 3. Leave the window open while you play. The game shows "AI connected" when it sees the bridge.
@@ -24,7 +24,7 @@ Run `StoryEngineBridge.exe --setup` to change the settings later, or edit `confi
 
 ## What is sent, and where
 
-The bridge sends requests **directly from your PC to the AI service you chose** (OpenAI or Anthropic), under their terms and privacy policies.
+The bridge sends requests **directly from your PC to the AI service you chose** (OpenAI, Anthropic or Google), under their terms and privacy policies.
 Nothing is sent to the mod author or any other server.
 
 Sent: character names and professions, in-game summaries (places, times, kills, injuries, moods, weather, quest events),

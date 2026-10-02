@@ -2,9 +2,9 @@
 
 Optional companion program for the **StoryEngine** Project Zomboid mod (Build 42.20+).
 It connects the mod's AI features — radio conversations and calls from contacts, the open radio channel, AI director, survival journal, character conversations, inner monologue — to an AI service
-(OpenAI or Anthropic) using **your own API key**.
+(OpenAI, Anthropic or Google Gemini) using **your own API key**.
 
-Unofficial fan project, not affiliated with The Indie Stone, OpenAI or Anthropic. 한국어 안내: [release_docs/README_KO.md](release_docs/README_KO.md)
+Unofficial fan project, not affiliated with The Indie Stone, OpenAI, Anthropic or Google. 한국어 안내: [release_docs/README_KO.md](release_docs/README_KO.md)
 
 - Mod: https://steamcommunity.com/sharedfiles/filedetails/?id=3808950035 (source: https://github.com/LeArc6910/PZ-StoryEngine)
 - Download (Windows): [Releases](https://github.com/LeArc6910/PZ-StoryEngine-Bridge/releases/latest)
@@ -47,7 +47,7 @@ python -m unittest discover -s tests
 ## Build the Windows release
 
 ```
-pip install pyinstaller openai anthropic
+pip install pyinstaller openai anthropic google-genai
 python build_release.py     # -> ../release/StoryEngineBridge-<version>-win64.zip (+ .sha256)
 ```
 
@@ -57,7 +57,7 @@ python build_release.py     # -> ../release/StoryEngineBridge-<version>-win64.zi
 |---|---|
 | `bridge.py` | main loop, file protocol, rate limit |
 | `modules.py` | turns game requests into prompts and JSON schemas (journal, director, radio, radio_scene, banter, monologue, summary) |
-| `providers/` | mock, OpenAI (Responses API), Anthropic |
+| `providers/` | mock, OpenAI (Responses API), Anthropic, Google Gemini (google-genai, generateContent) |
 | `prompts/` | system prompts |
 | `setup_wizard.py` | first-run setup |
 | `release_docs/` | player READMEs shipped in the zip |

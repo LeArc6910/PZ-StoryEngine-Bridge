@@ -1514,8 +1514,9 @@ def format_market(payload: dict, code: str, ids: list[str], lines: list[str]) ->
     if not said.get("text") or not market:
         return [], speakers
     if market.get("closed"):
-        why = ("they already have a trade going and must settle it first"
-               if market.get("closed") == "open_deal" else "nobody can spare anything right now")
+        why = {"open_deal": "they already have a trade going and must settle it first",
+               "too_soon": "offers were made to them only a little while ago; tell them to settle on one or ask again later"}
+        why = why.get(str(market.get("closed")), "nobody can spare anything right now")
         lines.append(f"Trading on this channel: if the player is asking for goods, nobody makes an offer now ({why}); "
                      "say so in character.")
         return [], speakers

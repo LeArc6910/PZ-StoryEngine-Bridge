@@ -133,6 +133,8 @@ class SocialTest(unittest.TestCase):
         closed = build_request("radio_scene", dict(payload, market={"closed": "open_deal"}), {"model": "m"})
         self.assertIn("nobody makes an offer now (they already have a trade going", closed.messages[0]["content"])
         self.assertNotIn("offers", closed.json_schema["properties"])
+        soon = build_request("radio_scene", dict(payload, market={"closed": "too_soon"}), {"model": "m"})
+        self.assertIn("offers were made to them only a little while ago", soon.messages[0]["content"])
         # 예약 장면(플레이어가 말하지 않음)에는 시장이 없다
         quiet = build_request("radio_scene", dict(payload, said=None, topic="weather"), {"model": "m"})
         self.assertNotIn("Trading on this channel", quiet.messages[0]["content"])

@@ -339,12 +339,26 @@ NOTE_TEXT = {
     "project_donation": "sent supplies to help {who} with their big project ({item})",
     "project_done": "heard that {who} finished their big project ({item}) with the players' help",
     "npc_gone": "{who} left for good and went off the air",
+    "named_accepted": "agreed to find and put to rest someone {who} once knew, who had turned",
+    "named_declined": "turned down {who}'s request to put a turned friend of theirs to rest",
+    "named_completed": "{by} put to rest someone {who} once knew, who had turned, and brought back what they carried",
+    "named_failed": "never found the turned friend {who} had asked them to put to rest",
+    "recover_found": "found what {by}, the survivor who came before them, left behind where they fell",
+    "memorial_read": "read the last diary pages of {by}, who died before them",
     # 이전 버전 세이브 호환
     "supply_offered": "heard that someone left supplies at {place}",
     "supply_approached": "got close to the building where the supplies were left ({place})",
     "supply_entered": "went into the building where the supplies were left ({place})",
     "supply_looted": "{by} found the supplies at {place}",
     "supply_expired": "never went for the supplies at {place}",
+}
+
+
+HOLIDAY_NAMES = {
+    "newyear": "New Year's Day", "seollal": "Seollal (the Korean Lunar New Year)",
+    "daeboreum": "Jeongwol Daeboreum (the first full moon of the lunar year)", "dano": "Dano (a Korean early-summer festival)",
+    "chuseok": "Chuseok (the Korean harvest festival)", "dongji": "Dongji (the Korean winter solstice)",
+    "christmas": "Christmas", "july4": "the Fourth of July", "halloween": "Halloween", "thanksgiving": "Thanksgiving",
 }
 
 
@@ -398,6 +412,16 @@ def format_note(note: dict, lang: Any = None) -> str | None:
         host = faction_label(note.get("faction"), lang) or "someone"
         text = f"{clip(note.get('clock'), 5)} listened to {host}'s evening news on the radio"
         return text + (": " + " / ".join(f'"{x}"' for x in heard) if heard else "")
+    if kind == "holiday":
+        # 명절 (게임 Holiday.lua): 한국어 게임이면 한국 명절, 아니면 미국 명절
+        name = HOLIDAY_NAMES.get(str(note.get("holiday")), "a holiday")
+        host = faction_label(note.get("faction"), lang)
+        text = f"{clip(note.get('clock'), 5)} it was {name}; everyone on the radio celebrated together"
+        if host:
+            text += f", led by {host}"
+        if note.get("full"):
+            text += ", with a real holiday meal made from what the survivors gathered"
+        return text
     if kind == "op":
         # 복구 작전 소식 (게임이 영어 문장을 만들어 보낸다, Ops.lua)
         text = clip(note.get("text"), 400)

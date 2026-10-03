@@ -37,9 +37,18 @@ max_retries = 1
 # thinking_level 을 받지 않는 모델이면 false 로 (effort 를 보내지 않는다)
 thinking = true
 
-# 모듈별 제공자와 모델. provider = "mock" | "anthropic" | "openai" | "gemini"
+[providers.deepseek]
+# api_key 를 비워두면 DEEPSEEK_API_KEY 환경 변수를 쓴다 (권장). OpenAI 호환 주소 https://api.deepseek.com
+api_key = ""
+timeout_seconds = 60
+max_retries = 1
+# false 면 effort 와 상관없이 사고(thinking)를 끈다 (더 빠르고 싸게)
+thinking = true
+
+# 모듈별 제공자와 모델. provider = "mock" | "anthropic" | "openai" | "gemini" | "deepseek"
+# 예: provider = "deepseek", model = "deepseek-v4-pro" (디렉터·일지·무전) / "deepseek-flash" (독백·요약·공용 주파수)
 # 예: provider = "gemini", model = "gemini-3.1-pro" (디렉터·일지·무전) / "gemini-3.8-flash", "gemini-3.1-flash-lite" (독백·요약)
-# effort: anthropic 은 output_config.effort, openai 는 reasoning.effort, gemini 는 thinking_level(none=MINIMAL, xhigh·max=HIGH)로 전달된다. 디렉터·일지 = 상위 모델, 독백 = 경량 모델.
+# effort: anthropic 은 output_config.effort, openai 는 reasoning.effort, gemini 는 thinking_level(none=MINIMAL, xhigh·max=HIGH), deepseek 는 thinking + reasoning_effort(none=사고 끔, medium=high, xhigh=max)로 전달된다. 디렉터·일지 = 상위 모델, 독백 = 경량 모델.
 [modules.debug]
 provider = "mock"           # 실제 호출을 시험하려면 "anthropic"
 model = "claude-opus-5"

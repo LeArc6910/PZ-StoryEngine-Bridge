@@ -34,4 +34,7 @@ def create_provider(name: str, cfg: dict):
     if name == "gemini":
         from .gemini_provider import GeminiProvider
         return GeminiProvider(cfg)
+    if name == "deepseek":
+        from .deepseek_provider import DeepSeekProvider
+        return DeepSeekProvider(cfg)
     raise ProviderError("unknown_provider", name)

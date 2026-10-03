@@ -1,7 +1,7 @@
 """처음 실행할 때 config.toml 을 만드는 설정 마법사 (배포판용).
 
 API 키는 이 PC 의 config.toml 에만 저장되고 다른 곳으로 보내지 않는다. 비워 두면 환경 변수
-(OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY)를 쓴다.
+(OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY / DEEPSEEK_API_KEY)를 쓴다.
 """
 
 from __future__ import annotations
@@ -13,7 +13,8 @@ PROVIDERS = {
     "1": ("openai", "OpenAI", "gpt-6-luna", "OPENAI_API_KEY"),
     "2": ("anthropic", "Anthropic (Claude)", "claude-haiku-4-5", "ANTHROPIC_API_KEY"),
     "3": ("gemini", "Google Gemini", "gemini-3.8-flash", "GEMINI_API_KEY"),
-    "4": ("mock", "Test mode (no AI, no cost) / 테스트 모드 (AI 없음, 비용 없음)", "mock", ""),
+    "4": ("deepseek", "DeepSeek", "deepseek-flash", "DEEPSEEK_API_KEY"),
+    "5": ("mock", "Test mode (no AI, no cost) / 테스트 모드 (AI 없음, 비용 없음)", "mock", ""),
 }
 MODULES = ("debug", "journal", "director", "radio", "monologue", "summary")
 

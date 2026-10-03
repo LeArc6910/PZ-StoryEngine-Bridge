@@ -96,6 +96,7 @@ def main() -> int:
         "--hidden-import", "providers.openai_provider",
         "--hidden-import", "providers.anthropic_provider",
         "--hidden-import", "providers.gemini_provider",
+        "--hidden-import", "providers.deepseek_provider",
         "--collect-submodules", "google.genai",
         "--paths", str(HERE),
         "--distpath", str(dist),

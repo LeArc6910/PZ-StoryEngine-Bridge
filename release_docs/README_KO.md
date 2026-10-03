@@ -2,7 +2,7 @@
 
 프로젝트 좀보이드 모드 **StoryEngine**(Build 42.20 이상)의 AI 기능(무전 대화, AI 디렉터, 일지, 독백)을
 **본인의 API 키**로 AI 서비스와 연결해 주는 선택 프로그램입니다.
-비공식 팬 제작물이며 The Indie Stone, OpenAI, Anthropic, Google과 관계가 없습니다.
+비공식 팬 제작물이며 The Indie Stone, OpenAI, Anthropic, Google, DeepSeek과 관계가 없습니다.
 
 모드는 브릿지 없이도 동작합니다(규칙 기반 사건과 준비된 문장). 브릿지는 AI가 쓰는 문장과 판단만 더합니다.
 
@@ -15,7 +15,7 @@
 
 1. 폴더를 원하는 곳에 압축 해제합니다 (예: `문서\StoryEngineBridge`).
 2. `StoryEngineBridge.exe`를 실행합니다. 처음 실행하면 설정 마법사가 묻습니다.
-   - AI 서비스: OpenAI, Anthropic(Claude), Google Gemini, 테스트 모드(AI 없음, 비용 없음)
+   - AI 서비스: OpenAI, Anthropic(Claude), Google Gemini, DeepSeek, 테스트 모드(AI 없음, 비용 없음)
    - API 키 (입력 내용은 보이지 않고, exe 옆의 `config.toml`에만 저장됩니다)
    - 게임 데이터 폴더 (기본값 `%USERPROFILE%\Zomboid\Lua\StoryEngine`이 싱글과 인게임 호스트에 맞습니다)
 3. 플레이하는 동안 창을 열어 두세요. 게임이 브릿지를 찾으면 "AI 연결됨"이 뜹니다.
@@ -24,7 +24,7 @@
 
 ## 무엇을 어디로 보내나요
 
-브릿지는 **이 PC에서 선택한 AI 서비스(OpenAI, Anthropic 또는 Google)로 직접** 요청을 보내며, 각 서비스의 약관과 개인정보 처리방침을 따릅니다.
+브릿지는 **이 PC에서 선택한 AI 서비스(OpenAI, Anthropic, Google 또는 DeepSeek)로 직접** 요청을 보내며, 각 서비스의 약관과 개인정보 처리방침을 따릅니다.
 모드 제작자나 다른 서버로는 아무것도 보내지 않습니다.
 
 보내는 것: 캐릭터 이름과 직업, 게임 속 요약(장소, 시각, 처치 수, 부상, 무들, 날씨, 퀘스트 사건),

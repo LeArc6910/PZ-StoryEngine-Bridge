@@ -87,8 +87,8 @@ class RadioModuleTest(unittest.TestCase):
                  "wants": ["ammo", "medical", "bogus"]}
         text = self.build({**PAYLOAD, "faction": "rats", "trade": trade}).messages[0]["content"]
         self.assertIn("What you can offer now (category up to tier): firearm up to 4, food up to 2", text)
-        self.assertIn("firearm: 1 = a 9mm pistol or .38 revolver with a dozen rounds;", text)
-        self.assertIn("4 = a shotgun with two boxes of shells", text)
+        self.assertIn("firearm: 1 = a light pistol or revolver (or a bolt-action small-caliber rifle) with ammo;", text)
+        self.assertIn("4 = a pump shotgun or a full-power semi-auto rifle with ammo", text)
         self.assertNotIn("5 = an assault rifle", text)
         self.assertIn("Payment you accept: ammo, medical", text)
         self.assertIn("x1.5 of the goods' value at this trust; tiers above 3 cost x1.5 more", text)
@@ -119,10 +119,10 @@ class RadioModuleTest(unittest.TestCase):
                              {"category": "firearm", "maxTier": 0, "needs": [60, 60, 60, 60, 80]}],
                  "wants": ["medical"]}
         text = self.build({**PAYLOAD, "faction": "ray", "lang": "EN", "trade": trade}).messages[0]["content"]
-        self.assertIn("medical: 1 = some bandages; 2 = bandages, painkillers and disinfectant; "
-                      "3 = bandages, disinfectant and antibiotics; "
-                      "4 = a surgical kit with antibiotics, sutures and a splint (locked: needs trust 60)", text)
-        self.assertIn("firearm: 1 = a 9mm pistol or .38 revolver with a dozen rounds (locked: needs trust 60)", text)
+        self.assertIn("medical: 1 = bandages, plasters or wipes; 2 = a bottle of pills (painkillers, antibiotics...) "
+                      "with dressings; 3 = a wound-care tool (tweezers, suture needle, splint or scalpel) with pills and "
+                      "dressings; 4 = several wound-care tools with medicine and dressings (locked: needs trust 60)", text)
+        self.assertIn("firearm: 1 = a light pistol or revolver (or a bolt-action small-caliber rifle) with ammo (locked: needs trust 60)", text)
         self.assertIn("(locked: needs trust 80)", text)
         self.assertIn("- You never trade: ammo, tools, melee, food", text)
         self.assertIn("do NOT offer something smaller in its place", text)
@@ -137,7 +137,7 @@ class RadioModuleTest(unittest.TestCase):
                  "deal": {"category": "food", "tier": 2, "price": 18, "basePrice": 20, "payCategory": "medical"},
                  "floor": 14, "haggles": 1, "haggleLeft": 2, "wants": ["medical", "tools", "bogus"]}
         text = self.build({**PAYLOAD, "faction": "ray", "lang": "EN", "trade": trade}).messages[0]["content"]
-        self.assertIn("You already offered them cans and water for a couple of days (food, tier 2) for payment in "
+        self.assertIn("You already offered them a few cans or snacks (food, tier 2) for payment in "
                       "medical worth 18 value points (your first asking price was 20)", text)
         self.assertIn("Your lowest price is 14 value points", text)
         self.assertIn("Haggling rounds left: 2", text)
@@ -190,9 +190,9 @@ class NewFactionsTest(unittest.TestCase):
         text = build_request("radio", {"faction": "dewey", "lang": "EN", "trust": 45, "trade": trade,
                                        "history": [{"from": "player", "name": "A", "text": "need parts"}]}, {}
                              ).messages[0]["content"]
-        self.assertIn("tools: 1 = a screwdriver or wrench", text)
-        self.assertIn("3 = engine parts or a car battery", text)
-        self.assertIn("food: 1 = a few cans", text)
+        self.assertIn("tools: 1 = a tire pump, jack, lug wrench or spare engine parts", text)
+        self.assertIn("3 = better suspension, brakes or tires", text)
+        self.assertIn("food: 1 = snacks and small bites", text)
 
 
 class LanguageTest(unittest.TestCase):

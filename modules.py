@@ -770,9 +770,9 @@ FACTIONS = {
         "trust": "Starts eager and friendly, but gets scared and closes up if anyone sounds threatening.",
         "speech": {"KO": "polite 해요체 toward adults, a bit breathless (~요, ~거든요, ~잖아요). Never banmal."},
         "trade_tiers": {
-            "tools": ["a few batteries or a flashlight", "a walkie-talkie or radio with batteries",
-                      "electronics parts, wire and a manual, or a better walkie-talkie",
-                      "a ham radio, or an amplifier with a pile of parts", "a generator, or a full radio kit"],
+            "tools": ["batteries, wire, a flashlight or a pager", "a radio, walkie-talkie or small electronics",
+                      "a better radio, a scanner or a lantern", "an amplifier, an old generator or a motion sensor",
+                      "a generator or a military radio"],
         },
     },
     "doc": {
@@ -783,11 +783,6 @@ FACTIONS = {
                "asks one or two sharp questions about an injury, then gives practical advice. Will not waste supplies on people who lie to her.",
         "trust": "Starts polite but guarded. Warms to people who are honest and look after others.",
         "speech": {"KO": "calm, polite 존댓말 (합쇼체 and 해요체: ~습니다, ~세요, ~해요). Colder or warmer with trust, but never banmal."},
-        "trade_tiers": {
-            "medical": ["bandages and wipes", "bandages, painkillers, disinfectant and tweezers",
-                        "antibiotics with a suture kit", "a surgical kit with antibiotics, splints and a scalpel",
-                        "a full medical bag"],
-        },
     },
     "pike": {
         "name": "Brother Amos Pike",
@@ -807,9 +802,9 @@ FACTIONS = {
         "trust": "Starts neutral. Likes people who keep their word and can fix things.",
         "speech": {"KO": "gruff, friendly banmal (~야, ~지, ~거든, ~냐)."},
         "trade_tiers": {
-            "tools": ["a screwdriver or wrench", "a lug wrench and jack, or a tire pump",
-                      "engine parts or a car battery", "a better car battery with engine parts, or a welding kit",
-                      "a heavy-duty battery, lots of engine parts and a manual, or a full welding setup"],
+            "tools": ["a tire pump, jack, lug wrench or spare engine parts", "brakes, a muffler or suspension parts",
+                      "better suspension, brakes or tires", "a car battery, a windshield or a beacon light",
+                      "a jerry can, a car battery or rare parts"],
         },
     },
     "hunter": {
@@ -820,12 +815,6 @@ FACTIONS = {
                "Has no patience for fools or talkers.",
         "trust": "Starts at zero. Barely answers strangers. Only deeds earn his respect.",
         "speech": {"KO": "very short, gruff banmal (~다, ~냐, ~해라)."},
-        "trade_tiers": {
-            "firearm": ["an old snub revolver with a few rounds", "a .357 or .44 revolver with a box of ammo",
-                        "a hunting rifle (.308 or .30-30) with a box", "a scoped hunting rifle or a double-barrel shotgun with ammo"],
-            "melee": ["a kitchen knife", "a hunting knife", "a hatchet and a hunting knife", "a wood axe or a machete"],
-            "food": ["some jerky", "jerky and water", "a stock of dried meat and water"],
-        },
     },
 }
 MAX_HISTORY = 16
@@ -834,19 +823,25 @@ TRADE_CATEGORIES = ["firearm", "ammo", "tools", "medical", "melee", "food"]
 TRADE_ACTIONS = ["none", "offer", "refuse", "gift", "counter", "withdraw"]
 # 등급별 거래 물건 안내 (게임 Trade.lua GOODS 와 맞춘다)
 TRADE_TIERS = {
-    "food": ["a few cans", "cans and water for a couple of days", "food and water for most of a week",
-             "a big stock of food and water", "enough food and water for weeks"],
-    "medical": ["some bandages", "bandages, painkillers and disinfectant", "bandages, disinfectant and antibiotics",
-                "a surgical kit with antibiotics, sutures and a splint", "a full field hospital kit"],
-    "tools": ["a screwdriver, saw or hammer", "a crowbar, wrench or hand axe", "two good tools",
-              "a sledgehammer, wood axe or blowtorch", "two rare heavy tools"],
-    "melee": ["a kitchen knife or bat", "a hunting knife or bat", "a machete or crowbar", "a katana or axe",
-              "a katana and a machete"],
-    "firearm": ["a 9mm pistol or .38 revolver with a dozen rounds", "a .45, .357 or .44 handgun with a box of ammo",
-                "a hunting rifle (.308 or .30-30) with ammo", "a shotgun with two boxes of shells",
-                "a military rifle or automatic weapon with plenty of ammo, plus a sidearm"],
-    "ammo": ["a couple dozen loose rounds", "one box of ammo", "two boxes of ammo",
-             "three boxes of shotgun or rifle ammo", "eight boxes of rifle ammo"],
+    # 2026-10-04 기준: 묶음의 첫 물건이 그 등급 물건이고 나머지는 더 작은 것들 (게임이 실시간으로 고른다)
+    "food": ["snacks and small bites", "a few cans or snacks", "proper meals (cans, jerky) and snacks",
+             "hearty food for several days", "a big stock of filling food"],
+    "medical": ["bandages, plasters or wipes", "a bottle of pills (painkillers, antibiotics...) with dressings",
+                "a wound-care tool (tweezers, suture needle, splint or scalpel) with pills and dressings",
+                "several wound-care tools with medicine and dressings",
+                "a large mix of wound-care tools, medicine and dressings"],
+    "tools": ["a very common tool (hammer, saw, screwdriver)", "a common tool (hand axe, bolt cutters, file)",
+              "a less common tool (chisels, club hammer, small saw)", "an uncommon tool (fire axe, wood axe, welding mask)",
+              "a rare tool (sledgehammer, pickaxe, anvil)"],
+    "melee": ["a weak or fragile weapon", "a light weapon", "a decent weapon", "a strong weapon",
+              "a top weapon that hits hard and lasts"],
+    "firearm": ["a light pistol or revolver (or a bolt-action small-caliber rifle) with ammo",
+                "a magnum handgun or a manual-action rifle with ammo",
+                "an intermediate-caliber semi-auto rifle or a submachine gun with ammo",
+                "a pump shotgun or a full-power semi-auto rifle with ammo",
+                "an automatic rifle or heavy-caliber weapon with ammo"],
+    "ammo": ["a box of pistol ammo (.38, 9mm, .45)", "magnum ammo (.357, .44)", "intermediate rifle ammo (5.56, 5.45, 5.8)",
+             "full-power ammo (.308, .30-30, 12 gauge)", ".338 magnum rifle ammo"],
 }
 
 
@@ -900,6 +895,9 @@ def format_haggle_rules(trade: dict, fid: str = "") -> list[str]:
                 "\"category\" and \"tier\" (the game rolls the new goods and sets a fresh price, so put \"price\" 0). "
                 "You can swap to: " + " | ".join(swaps) + ".",
                 "- Anything not in that list you cannot give in this deal; say so instead of agreeing.",
+                "- If they want one specific item instead, put its plain English name in \"item\" and their words in "
+                "\"item_said\" (with action \"counter\"); the game swaps in a bundle with it if you carry it. Otherwise "
+                "leave both empty.",
             ]
         else:
             lines.append("- You have nothing else to swap in right now. If they want different goods, say so; the "
@@ -984,6 +982,7 @@ def format_trade_rules(trade: dict, fid: str = "") -> list[str]:
             top = min(top, len(names))
             tiers = "; ".join(f"{i + 1} = {names[i]}" for i in range(top))
             lines.append(f"  {cat}: {tiers}")
+    lines.append("- The game picks the exact goods: the first item is of the tier, the rest is smaller stuff. If the player asked for one specific item (\"tweezers\", \"a hunting rifle\"), put its plain English item name in \"item\" and the words they used in \"item_said\"; the game puts that item in the deal if you carry it at a tier you can offer now, otherwise no offer is made and they are told you do not have it. Never promise a specific item unless you set \"item\"; otherwise leave both empty and talk about the kind of goods, not exact items.")
     wants = [w for w in as_list(trade.get("wants")) if w in TRADE_CATEGORIES]
     lines.append("- Payment you accept: " + (", ".join(wants) or "none"))
     recent = as_int(trade.get("recentRequests"))
@@ -1423,8 +1422,10 @@ def build_radio(payload: dict, mcfg: dict) -> LLMRequest:
                     "tier": {"type": "integer", "enum": [0, 1, 2, 3, 4, 5]},
                     "pay_category": {"type": "string", "enum": TRADE_CATEGORIES + ["none"]},
                     "price": {"type": "integer"},
+                    "item": {"type": "string"},
+                    "item_said": {"type": "string"},
                 },
-                "required": ["action", "category", "tier", "pay_category", "price"],
+                "required": ["action", "category", "tier", "pay_category", "price", "item", "item_said"],
                 "additionalProperties": False,
             },
         },
@@ -1629,7 +1630,9 @@ def format_market(payload: dict, code: str, ids: list[str], lines: list[str]) ->
                  "asks for payment in one category that person accepts. Those who offer say so briefly in their own line "
                  "(plain words, no numbers; the exact goods and price are shown to the player). Choose who offers by what "
                  "the player asked for and how each person feels about the players. If the player is not asking for "
-                 "goods, make no offers.")
+                 "goods, make no offers. The game picks the exact goods; if the player asked for one specific item, give "
+                 "its plain English name in each offer's \"item\" and their words in \"item_said\" (offers from people "
+                 "who do not carry it are dropped), otherwise leave both empty and never promise an exact item.")
     stock = {c: as_int(v) for c, v in as_dict(market.get("stock")).items() if c in TRADE_CATEGORIES and as_int(v) > 0}
     if stock:
         # 판매 시장: 플레이어가 가진 물건을 내놓으면 그것을 받는 사람들이 자기 물건을 제안한다 (게임이 값을 정한다)
@@ -1793,8 +1796,10 @@ def build_radio_scene(payload: dict, mcfg: dict) -> LLMRequest:
                     "category": {"type": "string", "enum": TRADE_CATEGORIES},
                     "tier": {"type": "integer"},
                     "pay_category": {"type": "string", "enum": TRADE_CATEGORIES},
+                    "item": {"type": "string"},
+                    "item_said": {"type": "string"},
                 },
-                "required": ["faction", "category", "tier", "pay_category"],
+                "required": ["faction", "category", "tier", "pay_category", "item", "item_said"],
                 "additionalProperties": False,
             },
         }

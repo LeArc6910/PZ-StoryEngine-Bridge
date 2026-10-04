@@ -780,7 +780,7 @@ FACTIONS = {
         "local": {"KO": "준 애들러"},
         "who": "A former ER nurse in her forties who keeps a small clinic running in Riverside, caring for a handful "
                "of wounded survivors. Calm, direct, exhausted, dry sense of humour. Rations medicine carefully and "
-               "asks clinical questions about injuries. Will not waste supplies on people who lie to her.",
+               "asks one or two sharp questions about an injury, then gives practical advice. Will not waste supplies on people who lie to her.",
         "trust": "Starts polite but guarded. Warms to people who are honest and look after others.",
         "speech": {"KO": "calm, polite 존댓말 (합쇼체 and 해요체: ~습니다, ~세요, ~해요). Colder or warmer with trust, but never banmal."},
         "trade_tiers": {
@@ -802,7 +802,7 @@ FACTIONS = {
         "name": "Dewey Hollis",
         "local": {"KO": "듀이 홀리스"},
         "who": "A mechanic in his thirties living in his garage in Echo Creek, surrounded by half-fixed cars. "
-               "Friendly in a gruff way, talks about engines constantly, swears when things go wrong. Trades car parts "
+               "Friendly in a gruff way, loves talking about engines when it comes up, swears when things go wrong. Trades car parts "
                "and tools and dreams of building a truck that can get people out of the county.",
         "trust": "Starts neutral. Likes people who keep their word and can fix things.",
         "speech": {"KO": "gruff, friendly banmal (~야, ~지, ~거든, ~냐)."},
@@ -1260,6 +1260,74 @@ FOLLOW_UP_HOURS = [0, 1, 2, 3, 4, 6, 8, 12, 24]
 MAX_MESSAGE = 240
 
 
+# NPC 특기 (게임 Specialty.lua): 플레이어가 거점 탭의 특기 버튼으로 청한다. AI 는 알려 주기만 한다
+SPECIALTY = {
+    "guard": "send an armed squad (or a marksman) to back them up for a few hours",
+    "doc": "talk them through treating their worst injury over the radio (first aid; it cannot cure a bite)",
+    "dewey": "come out and repair their vehicle",
+    "casey": "scout the area with your radio gear and mark the dangers on their map",
+    "ray": "drive a load of supplies over to another survivor group on their behalf",
+    "pike": "pray with them over the radio and calm their fear and nerves",
+    "hunter": "cover them with your rifle from a distance and shoot the dead around them",
+    "rats": "make a racket far away to pull the dead off them",
+}
+SPECIALTY_REASON = {
+    "low_trust": "not yet: you do not trust them enough (needs trust 40)",
+    "cooldown": "not right now: you did it recently, wait about {wait} more hours",
+    "no_resource": "not right now: your own people are too short of supplies",
+    "ill": "not right now: you are sick",
+    "gone": "no",
+    "off": "no",
+}
+
+
+# 게임 화면의 이름 (모드 번역 파일과 같게): 거점 탭, 특기 버튼
+SPECIALTY_UI = {"KO": ("거점", "특기"), "EN": ("Bases", "Specialty")}
+
+
+def format_specialty(fid: str, status: Any, code: str = "EN") -> str | None:
+    what = SPECIALTY.get(fid)
+    status = as_dict(status)
+    if not what or not status:
+        return None
+    reason = str(status.get("reason") or "")
+    if reason in ("gone", "off"):
+        return None
+    if reason:
+        now = SPECIALTY_REASON.get(reason, "not right now").format(wait=as_int(status.get("wait")))
+    else:
+        now = "yes, you can do it now"
+    tab, button = SPECIALTY_UI.get(code, SPECIALTY_UI["EN"])
+    return (f"What you can do for them (your special skill): {what}. They ask for it with the \"{button}\" button on "
+            f"your page in their \"{tab}\" tab (use exactly these names). Can you right now: {now}.")
+
+
+def format_player_state(name: str, state: Any) -> str | None:
+    state = as_dict(state)
+    if not state:
+        return None
+    hp = as_int(state.get("hp"), -1)
+    wounds = []
+    for w in as_list(state.get("wounds"))[:8]:
+        w = as_dict(w)
+        part = BODY_PARTS.get(str(w.get("part")), clip(w.get("part"), 30))
+        kind = WOUNDS.get(str(w.get("kind")), clip(w.get("kind"), 20))
+        extra = []
+        if w.get("bleeding"):
+            extra.append("bleeding")
+        if w.get("bandaged"):
+            extra.append("bandaged")
+        wounds.append(f"{kind} on the {part}" + (f" ({', '.join(extra)})" if extra else ""))
+    if hp < 0 and not wounds:
+        return None
+    health = ("unhurt" if hp >= 90 and not wounds else "lightly hurt" if hp >= 70
+              else "hurt" if hp >= 45 else "badly hurt")
+    text = f"How {name} is right now (facts; treat them as what they told you or what you can hear in their voice, "            f"and do not ask about them again): {health}"
+    if wounds:
+        text += "; " + "; ".join(wounds)
+    return text + "."
+
+
 def build_radio(payload: dict, mcfg: dict) -> LLMRequest:
     fid = str(payload.get("faction", ""))
     faction = FACTIONS.get(fid)
@@ -1289,6 +1357,9 @@ def build_radio(payload: dict, mcfg: dict) -> LLMRequest:
     persona.extend(format_story_context(payload.get("story")))
     persona.extend(format_life_context(payload.get("life")))
     persona.extend(format_newcomer(payload.get("newcomer")))
+    spec = format_specialty(fid, payload.get("specialty"), code)
+    if spec:
+        persona.append(spec)
 
     lines = [
         f"Language: {language_name(code)}",
@@ -1311,6 +1382,11 @@ def build_radio(payload: dict, mcfg: dict) -> LLMRequest:
     mode = payload.get("mode")
     topic = clip(payload.get("topic"), 300)
     if not mode:
+        speaker = next((clip(as_dict(m).get("name"), NAME_LIMIT) for m in reversed(history)
+                        if as_dict(m).get("from") == "player"), "") or "the player"
+        state_line = format_player_state(speaker, payload.get("speakerState"))
+        if state_line:
+            lines.append(state_line)
         lines.extend(format_trade_rules(payload.get("trade"), fid))
     if mode == "follow_up":
         lines.append(f"Nobody has called you. You are calling them back yourself about: {topic or 'what you promised to check'}")
@@ -1525,6 +1601,8 @@ def build_summary(payload: dict, mcfg: dict) -> LLMRequest:
 # ---------------------------------------------------------------- open channel scene
 
 MAX_SCENE_LINES = 6
+REPLY_SCENE_LINES = 4      # 플레이어에게 답하는 장면 (2026-10-04: 줄 수를 채우려고 질문을 덧붙이지 않게)
+SCENE_LOG = 20             # 장면에 보여 주는 최근 줄 (게임 Social.SCENE_LOG 와 같게)
 
 
 MARKET_MAX = 3
@@ -1630,6 +1708,13 @@ def build_radio_scene(payload: dict, mcfg: dict) -> LLMRequest:
         words = life_state_words(x.get("state"))
         if words:
             bits.append(f"Their people right now: {words}.")
+        spec = format_specialty(fid, x.get("specialty"), code)
+        if spec:
+            bits.append(spec.replace("What you can do for them (your special skill)", "Their special skill")
+                        .replace("your page", "their page").replace("Can you right now", "Can they right now")
+                        .replace("you do not trust them", "they do not trust the players").replace("you did it", "they did it")
+                        .replace("your own people", "their people").replace("you are sick", "they are sick")
+                        .replace("yes, you can", "yes, they can"))
         rels = []
         for r in as_list(x.get("relations"))[:3]:
             r = as_dict(r)
@@ -1650,7 +1735,7 @@ def build_radio_scene(payload: dict, mcfg: dict) -> LLMRequest:
         lines.append("Players listening: " + ", ".join(players))
     sellers, speakers = format_market(payload, code, ids, lines)
     lines.append("Recent talk on the open channel (oldest first):")
-    log = as_list(payload.get("log"))[-12:]
+    log = as_list(payload.get("log"))[-SCENE_LOG:]
     for m in log:
         m = as_dict(m)
         text = clip(m.get("text"), MAX_MESSAGE)
@@ -1670,10 +1755,16 @@ def build_radio_scene(payload: dict, mcfg: dict) -> LLMRequest:
         interrupted = clip(payload.get("interrupted"), 400)
         if interrupted:
             lines.append(f"The player cut into a conversation that was still going on. It was about: {interrupted}")
-        lines.append("Those who would react answer the player first, each in their own way, then they react to each other.")
+        state_line = format_player_state(clip(said.get("name"), NAME_LIMIT) or "the player", said.get("state"))
+        if state_line:
+            lines.append(state_line)
+        lines.append("Those who have something to add answer the player (usually one or two of them), then they may "
+                     "react to each other. Do not repeat questions already asked or answered above.")
+        count = f"Write 2 to {REPLY_SCENE_LINES} lines."
     else:
         lines.append(f"What they talk about now: {clip(payload.get('topic'), 400) or 'small talk'}")
-    lines.append(f"Write 3 to {MAX_SCENE_LINES} lines. Speak only {language_name(code)}. "
+        count = f"Write 3 to {MAX_SCENE_LINES} lines."
+    lines.append(f"{count} Speak only {language_name(code)}. "
                  "Do not mix in English words, except radio words like \"over\" when natural.")
     schema = {
         "type": "object",

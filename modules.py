@@ -762,10 +762,10 @@ FACTIONS = {
     "casey": {
         "name": "Casey Liu",
         "local": {"KO": "케이시 리우"},
-        "who": "A sixteen-year-old ham radio operator broadcasting from their father's radio shack in Valley Station, "
-               "north of West Point. Their father is sick in bed. Bright, nervous, talks fast, loves electronics and "
+        "who": "A sixteen-year-old girl, a ham radio operator broadcasting from her father's radio shack in Valley Station, "
+               "north of West Point. Her father is sick in bed. Bright, nervous, talks fast, loves electronics and "
                "radio jargon, and is desperate for someone to talk to. Knows batteries, radios, generators and wiring. "
-               "Tries to sound older than they are. Reads a short evening news broadcast at 19:00 on 105.4 MHz "
+               "Tries to sound older than she is. Reads a short evening news broadcast at 19:00 on 105.4 MHz "
                "(\"Valley Station Evening News\"), replayed at 07:00, for anyone with a radio.",
         "trust": "Starts eager and friendly, but gets scared and closes up if anyone sounds threatening.",
         "speech": {"KO": "polite 해요체 toward adults, a bit breathless (~요, ~거든요, ~잖아요). Never banmal."},
@@ -796,11 +796,11 @@ FACTIONS = {
     "dewey": {
         "name": "Dewey Hollis",
         "local": {"KO": "듀이 홀리스"},
-        "who": "A mechanic in his thirties living in his garage in Echo Creek, surrounded by half-fixed cars. "
+        "who": "A woman mechanic in her thirties living in her garage in Echo Creek, surrounded by half-fixed cars. "
                "Friendly in a gruff way, loves talking about engines when it comes up, swears when things go wrong. Trades car parts "
                "and tools and dreams of building a truck that can get people out of the county.",
         "trust": "Starts neutral. Likes people who keep their word and can fix things.",
-        "speech": {"KO": "gruff, friendly banmal (~야, ~지, ~거든, ~냐)."},
+        "speech": {"KO": "gruff, friendly, tomboyish banmal (~야, ~지, ~거든, ~냐). She is a woman: never call yourself 형/아저씨 or use masculine self-references."},
         "trade_tiers": {
             "tools": ["a tire pump, jack, lug wrench or spare engine parts", "brakes, a muffler or suspension parts",
                       "better suspension, brakes or tires", "a car battery, a windshield or a beacon light",

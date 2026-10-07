@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -363,7 +364,7 @@ HOLIDAY_NAMES = {
 
 
 def faction_label(fid: Any, lang: Any) -> str:
-    faction = FACTIONS.get(str(fid))
+    faction = PERSONAS.get(str(fid))
     if not faction:
         return ""
     local = faction["local"].get(str(lang or "").upper(), "")
@@ -697,7 +698,7 @@ def build_director(payload: dict, mcfg: dict) -> LLMRequest:
     if npcs:
         lines.append("Radio contacts' situation (their people's supplies, 0-100):")
         for n in npcs:
-            f = FACTIONS.get(str(n.get("id")))
+            f = PERSONAS.get(str(n.get("id")))
             if not f:
                 continue
             lines.append(f"- {f['name']} (trust {as_int(n.get('trust'))}): {life_state_words(n.get('state'))}")
@@ -817,6 +818,116 @@ FACTIONS = {
         "speech": {"KO": "very short, gruff banmal (~다, ~냐, ~해라)."},
     },
 }
+
+
+# 후임 목소리 (모드 Voices.lua, 2026-10-07): 앞 사람이 죽거나 떠난 뒤 같은 주파수를 이어받은 사람.
+# 게임이 요청마다 payload.voices = { 채널: 후임 } 을 붙이면, 그 채널의 이름·성격·말투를 이 사전으로 바꾼다
+# (거래 등급 설명 같은 거점 정보는 그대로).
+VOICES = {
+    "martha": {
+        "name": "Martha Cole",
+        "local": {"KO": "마사 콜"},
+        "who": "A widow in her sixties from the farm next to Ray Mercer's outside West Point. She had promised to watch "
+               "Ray's farm; now she runs it and keeps his radio and notebook of frequencies. Blunt, generous, "
+               "unsentimental, practical about everything.",
+        "trust": "Starts as a stranger who heard about the players from Ray.",
+        "speech": {"KO": "blunt banmal of an older country woman (~지, ~어, ~다, sometimes ~구먼). Never 존댓말, never 하게체."},
+    },
+    "nora": {
+        "name": "Nora Bell",
+        "local": {"KO": "노라 벨"},
+        "who": "A radio operator in her twenties from Brandenburg who used to listen to Casey Liu's broadcasts and came "
+               "down to keep Casey's frequency in Valley Station alive. Calm, wry, organized; learning the county from "
+               "Casey's logbook.",
+        "trust": "Starts as a stranger who knows the players only from Casey's logbook.",
+        "speech": {"KO": "calm, polite 해요체 (~요). Never banmal."},
+    },
+    "sam": {
+        "name": "Sam",
+        "local": {"KO": "샘"},
+        "who": "The boy whose broken leg June Adler set, seventeen now and her apprentice, running the Riverside clinic "
+               "with her notes and kit. Earnest, nervous, learning fast, scared of getting it wrong.",
+        "trust": "Starts as a stranger who knows the players helped June.",
+        "speech": {"KO": "nervous, polite 해요체 (~요), 습니다 when serious. Never banmal."},
+    },
+    "esther": {
+        "name": "Esther Gray",
+        "local": {"KO": "에스더 그레이"},
+        "who": "The woman in her fifties who ran the kitchen and storeroom of the March Ridge church. Not a preacher; "
+               "she keeps the place running and the doors open. Practical, warm, no patience for nonsense.",
+        "trust": "Starts as a stranger who heard about the players from Brother Pike.",
+        "speech": {"KO": "warm, motherly 해요체 with ~지요 (~요, ~지요). Never banmal."},
+    },
+    "lenny": {
+        "name": "Lenny Austin",
+        "local": {"KO": "레니 오스틴"},
+        "who": "A young man Dewey Hollis was teaching to be a mechanic, now running her Echo Creek garage. Eager, "
+               "clumsy, worshipped Dewey, talks to her tools when nobody is listening.",
+        "trust": "Starts as a stranger who heard about the players from Dewey.",
+        "speech": {"KO": "eager, casual banmal (~야, ~거든, ~냐)."},
+    },
+    "kowalski": {
+        "name": "Corporal Kowalski",
+        "local": {"KO": "코왈스키 상병"},
+        "who": "The last corporal of Sergeant Whitaker's National Guard squad, twenty-two, suddenly in command at the "
+               "Knox Boundary Camp. Tries to sound like Whitaker and fails; careful with ammunition.",
+        "trust": "Starts wary, like Whitaker, but less sure of himself.",
+        "speech": {"KO": "stiff military 다나까 speech (~다, ~습니다, ~나?), sometimes faltering. Never 해요체, never casual banmal."},
+    },
+    "red": {
+        "name": "Red",
+        "local": {"KO": "레드"},
+        "who": "A sharp-tongued woman who stayed with the Coalfield crew after the raid and holds it together now. "
+               "Pragmatic, tired of fighting, wants fewer fights and more deals.",
+        "trust": "Starts cold but fair.",
+        "speech": {"KO": "dry, sharp banmal (~야, ~지, ~거든)."},
+    },
+    "dutch": {
+        "name": "Dutch",
+        "local": {"KO": "더치"},
+        "who": "Vic's former second, now running the Coalfield crew like a warlord. Menacing, greedy, enjoys threats and "
+               "making people pay; will still trade if the price is right.",
+        "trust": "Starts hostile. Respects only strength and payment.",
+        "speech": {"KO": "menacing, mocking banmal (~냐, ~지, ~해라)."},
+    },
+    "caleb": {
+        "name": "Caleb Tate",
+        "local": {"KO": "케일럽 테이트"},
+        "who": "The son of Hank Tolliver's late hunting partner Earl, in his thirties, a carpenter. Came looking for "
+               "Hank, found the Ekron cabin empty and stayed to keep the trap lines. Quiet like Hank, gentler.",
+        "trust": "Starts as a quiet stranger.",
+        "speech": {"KO": "quiet, plain 존댓말 (~습니다, ~요), few words."},
+    },
+}
+
+_VOICES = contextvars.ContextVar("storyengine_voices", default={})
+
+
+class _Personas:
+    """FACTIONS 를 읽되, 이 요청에서 후임이 이어받은 채널은 후임의 이름·성격·말투로."""
+
+    def get(self, fid, default=None):
+        base = FACTIONS.get(fid)
+        if base is None:
+            return default
+        voice = _VOICES.get().get(str(fid))
+        if voice and voice in VOICES:
+            merged = dict(base)
+            merged.update(VOICES[voice])
+            return merged
+        return base
+
+    def __getitem__(self, fid):
+        value = self.get(fid)
+        if value is None:
+            raise KeyError(fid)
+        return value
+
+    def __contains__(self, fid):
+        return fid in FACTIONS
+
+
+PERSONAS = _Personas()
 MAX_HISTORY = 16
 TRADE_CATEGORIES = ["firearm", "ammo", "tools", "medical", "melee", "food"]
 # counter / withdraw 는 답을 기다리는 제안을 흥정할 때만 쓴다
@@ -846,7 +957,7 @@ TRADE_TIERS = {
 
 
 def tier_name(fid: str, cat: str, tier: int) -> str:
-    names = FACTIONS.get(fid, {}).get("trade_tiers", {}).get(cat, TRADE_TIERS.get(cat, []))
+    names = PERSONAS.get(fid, {}).get("trade_tiers", {}).get(cat, TRADE_TIERS.get(cat, []))
     return names[tier - 1] if 1 <= tier <= len(names) else f"{cat} tier {tier}"
 
 
@@ -912,7 +1023,7 @@ def format_haggle_rules(trade: dict, fid: str = "") -> list[str]:
 
 def format_trade_rules(trade: dict, fid: str = "") -> list[str]:
     trade = as_dict(trade)
-    special = FACTIONS.get(fid, {}).get("trade_tiers", {})
+    special = PERSONAS.get(fid, {}).get("trade_tiers", {})
     if trade.get("negotiating"):
         return format_haggle_rules(trade, fid)
     if not trade.get("allowed"):
@@ -1088,7 +1199,7 @@ def format_story_context(story: Any) -> list[str]:
     others = []
     for o in as_list(story.get("others"))[:6]:
         o = as_dict(o)
-        f = FACTIONS.get(str(o.get("id")))
+        f = PERSONAS.get(str(o.get("id")))
         note = clip(o.get("note"), 200)
         bond = bond_line(o)
         if not f or not (note or o.get("shift") or as_int(o.get("bond"), 0) != 0):
@@ -1226,7 +1337,7 @@ def format_life_context(life: Any) -> list[str]:
         template = RECORD_TEXT.get(str(r.get("kind")))
         if not template:
             continue
-        src = FACTIONS.get(str(r.get("src")), {}).get("name", "someone")
+        src = PERSONAS.get(str(r.get("src")), {}).get("name", "someone")
         line = template.format(who=clip(r.get("who"), NAME_LIMIT) or "one of them", src=src)
         if r.get("dead") and r.get("kind") != "player_died":
             line += f" ({clip(r.get('who'), NAME_LIMIT)} is dead now)"
@@ -1329,7 +1440,7 @@ def format_player_state(name: str, state: Any) -> str | None:
 
 def build_radio(payload: dict, mcfg: dict) -> LLMRequest:
     fid = str(payload.get("faction", ""))
-    faction = FACTIONS.get(fid)
+    faction = PERSONAS.get(fid)
     if not faction:
         raise ModuleError("unknown_faction")
     code = str(payload.get("lang") or "EN").upper()
@@ -1577,7 +1688,7 @@ def build_summary(payload: dict, mcfg: dict) -> LLMRequest:
             lines.append(entry)
         system = load_prompt("summary_week")
     elif kind == "radio_memory":
-        faction = FACTIONS.get(str(payload.get("faction", "")))
+        faction = PERSONAS.get(str(payload.get("faction", "")))
         if not faction:
             raise ModuleError("unknown_faction")
         lines = [f"You are: {faction['name']}. {faction['who']}"]
@@ -1661,7 +1772,7 @@ def format_market(payload: dict, code: str, ids: list[str], lines: list[str]) ->
         if not goods or not wants:
             continue
         sellers.append(fid)
-        f = FACTIONS[fid]
+        f = PERSONAS[fid]
         local = f["local"].get(code, "")
         name = f"{f['name']} ({local})" if local else f["name"]
         extra = ""
@@ -1697,7 +1808,7 @@ def build_radio_scene(payload: dict, mcfg: dict) -> LLMRequest:
     ]
     for x in parts:
         fid = str(x.get("id"))
-        f = FACTIONS[fid]
+        f = PERSONAS[fid]
         local = f["local"].get(code, "")
         name = f"{f['name']} ({local})" if local else f["name"]
         bits = [f"- {fid} = {name}. {f['who']}"]
@@ -1721,7 +1832,7 @@ def build_radio_scene(payload: dict, mcfg: dict) -> LLMRequest:
         rels = []
         for r in as_list(x.get("relations"))[:3]:
             r = as_dict(r)
-            other = FACTIONS.get(str(r.get("id")))
+            other = PERSONAS.get(str(r.get("id")))
             if not other:
                 continue
             bits_r = [clip(r.get("note"), 200)] if r.get("note") else []
@@ -1747,7 +1858,7 @@ def build_radio_scene(payload: dict, mcfg: dict) -> LLMRequest:
         if m.get("from") == "player":
             who = f"{clip(m.get('name'), NAME_LIMIT) or 'a player'} (a player)"
         else:
-            who = FACTIONS.get(str(m.get("npc")), {}).get("name", "someone")
+            who = PERSONAS.get(str(m.get("npc")), {}).get("name", "someone")
         lines.append(f'[{clip(m.get("clock"), 5)}] {who}: "{text}"')
     if not log:
         lines.append("(nothing yet)")
@@ -1941,7 +2052,7 @@ def build_broadcast(payload: dict, mcfg: dict) -> LLMRequest:
     """게임 속 라디오 저녁 방송 (Broadcast.lua). 진행자 한 명이 6~10줄."""
     code = str(payload.get("lang") or "EN").upper()
     host = str(payload.get("host"))
-    f = FACTIONS.get(host)
+    f = PERSONAS.get(host)
     if not f:
         raise ModuleError("bad_payload")
     local = f["local"].get(code, "")
@@ -2010,7 +2121,7 @@ def build_letter(payload: dict, mcfg: dict) -> LLMRequest:
     """NPC 가 보급품에 넣는 손편지 (Letters.lua)."""
     code = str(payload.get("lang") or "EN").upper()
     fid = str(payload.get("faction"))
-    f = FACTIONS.get(fid)
+    f = PERSONAS.get(fid)
     reason = str(payload.get("reason"))
     if not f or reason not in LETTER_REASONS:
         raise ModuleError("bad_payload")
@@ -2071,4 +2182,9 @@ def build_request(module: str, payload: dict, mcfg: dict) -> LLMRequest:
         raise ModuleError("unknown_module")
     if not isinstance(payload, dict):
         raise ModuleError("bad_payload")
-    return builder(payload, mcfg)
+    voices = payload.get("voices")
+    token = _VOICES.set({str(k): str(v) for k, v in voices.items()} if isinstance(voices, dict) else {})
+    try:
+        return builder(payload, mcfg)
+    finally:
+        _VOICES.reset(token)

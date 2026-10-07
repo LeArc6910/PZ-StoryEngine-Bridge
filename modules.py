@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import contextvars
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -2162,7 +2163,116 @@ def build_letter(payload: dict, mcfg: dict) -> LLMRequest:
     )
 
 
+# ---------------------------------------------------------------- episode (AI 곁가지)
+
+EPISODE_KINDS = {
+    "quiet": "A quiet side story: something small happens in your life over a couple of days and then settles. "
+             "No request to the players. Write \"start\" (it begins) and \"end\" (how it settled), and pick \"tone\".",
+    "items": "A side story in which you ask the players for the items listed below. Write \"start\" (what happens and "
+             "why you need those things, ending with the request), \"why\" (one short English clause for the quest log), "
+             "\"win\" (how it turned out because they brought the items) and \"lose\" (how it turned out without them).",
+    "horde": "A side story in which you ask the players to clear a group of the dead from a place near them (the game "
+             "picks the place and tells them where). Write \"start\" (what happens and why the dead there are a "
+             "problem for you, ending with the request), \"why\" (one short English clause for the quest log), \"win\" "
+             "(how it turned out because they cleared it) and \"lose\" (how it turned out when nobody did).",
+}
+
+
+def item_words(full_type: Any) -> str:
+    """"Base.TinnedBeans" -> "Tinned Beans" (AI 에 넘기는 물건 이름)."""
+    name = str(full_type or "").split(".")[-1]
+    name = re.sub(r"(?<=[a-z])(?=[A-Z0-9])|(?<=[0-9])(?=[A-Z])", " ", name)
+    return clip(name, 60)
+
+
+def build_episode(payload: dict, mcfg: dict) -> LLMRequest:
+    """AI 곁가지 (AiTales.lua): 게임이 종류·물건을 정하고 AI 는 짧은 이야기만 쓴다."""
+    code = str(payload.get("lang") or "EN").upper()
+    fid = str(payload.get("faction"))
+    f = PERSONAS.get(fid)
+    kind = str(payload.get("kind"))
+    if not f or kind not in EPISODE_KINDS:
+        raise ModuleError("bad_payload")
+    local = f["local"].get(code, "")
+    name = f"{f['name']} ({local})" if local else f["name"]
+    lines = [
+        f"Language for say, tale and title: {language_name(code)}",
+        f"You are {name}. {f['who']}",
+    ]
+    speech = f.get("speech", {}).get(code)
+    if speech:
+        lines.append(f"Your speech level in \"say\", always the same: {speech}")
+    trust = max(0, min(100, as_int(payload.get("trust"), 50)))
+    lines.append(f"Toward the players you {trust_attitude(trust)}.")
+    memory = clip(payload.get("memory"), 1000)
+    if memory:
+        lines.append(f"What you remember from radio talks with the players: {memory}")
+    lines.extend(format_story_context(payload.get("story")))
+    lines.extend(format_life_context(payload.get("life")))
+    season = clip(payload.get("season"), 20)
+    if season:
+        lines.append(f"Season: {season}.")
+    world = [clip(w, 40) for w in as_list(payload.get("world")) if w]
+    if world:
+        lines.append("County conditions now: " + ", ".join(world) + ".")
+    players = [clip(p, NAME_LIMIT) for p in as_list(payload.get("players"))[:6] if p]
+    if players:
+        lines.append("Players on the radio now: " + ", ".join(players) + ".")
+    recent = []
+    for r in as_list(payload.get("recent"))[:12]:
+        r = as_dict(r)
+        bit = clip(r.get("title"), 80)
+        beat = clip(r.get("beat"), 200)
+        if bit or beat:
+            recent.append("- " + (f"{bit}: " if bit else "") + (beat or ""))
+    if recent:
+        lines.append("Side stories you already had (do not repeat them, find something new):")
+        lines.extend(recent)
+    lines.append("")
+    lines.append("What to write: " + EPISODE_KINDS[kind])
+    if kind != "quiet":
+        tier = max(1, min(5, as_int(payload.get("tier"), 1)))
+        lines.append(f"Size of the request: {tier} of 5.")
+        if kind == "items":
+            wanted = []
+            for it in as_list(payload.get("items"))[:6]:
+                it = as_dict(it)
+                n = max(1, as_int(it.get("count"), 1))
+                wanted.append(f"{n} x {item_words(it.get('item'))}")
+            if not wanted:
+                raise ModuleError("bad_payload")
+            lines.append("The items you ask for (exactly these): " + ", ".join(wanted) + ".")
+        why = clip(payload.get("why"), 240)
+        if why:
+            lines.append(f"A reason the game had in mind (you may use it or write a better one that fits these items): {why}")
+    lines.append(f"Write it now. say, tale and title only in {language_name(code)}; beat and why in English.")
+    scene = {
+        "type": "object",
+        "properties": {"beat": {"type": "string"}, "say": {"type": "string"}, "tale": {"type": "string"}},
+        "required": ["beat", "say", "tale"],
+        "additionalProperties": False,
+    }
+    if kind == "quiet":
+        props = {"title": {"type": "string"}, "start": scene, "end": scene,
+                 "tone": {"type": "string", "enum": ["good", "mixed", "bad"]}}
+        required = ["title", "start", "end", "tone"]
+    else:
+        props = {"title": {"type": "string"}, "start": scene, "why": {"type": "string"}, "win": scene, "lose": scene}
+        required = ["title", "start", "why", "win", "lose"]
+    schema = {"type": "object", "properties": props, "required": required, "additionalProperties": False}
+    return LLMRequest(
+        module="episode",
+        model=str(mcfg.get("model", "mock")),
+        system=load_prompt("episode"),
+        messages=[{"role": "user", "content": chr(10).join(lines)}],
+        max_tokens=int(mcfg.get("max_tokens", 6000)),
+        effort=mcfg.get("effort"),
+        json_schema=schema,
+    )
+
+
 BUILDERS = {
+    "episode": build_episode,
     "debug": build_debug,
     "letter": build_letter,
     "broadcast": build_broadcast,

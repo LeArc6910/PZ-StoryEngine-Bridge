@@ -79,3 +79,10 @@ max_tokens = 1024
 provider = "anthropic"
 model = "claude-haiku-4-5"
 max_tokens = 4000
+
+# 선택: 따로 적지 않으면 radio 설정을 쓰는 모듈 — letter(NPC 편지), broadcast(저녁 라디오 방송),
+# radio_scene(공용 주파수 장면), episode(AI 곁가지 이야기). banter(동료 대화)는 monologue 설정을 쓴다.
+# [modules.episode]
+# provider = "anthropic"
+# model = "claude-sonnet-5-5"
+# max_tokens = 6000

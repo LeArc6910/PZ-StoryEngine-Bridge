@@ -364,8 +364,15 @@ HOLIDAY_NAMES = {
 }
 
 
-def faction_label(fid: Any, lang: Any) -> str:
-    faction = PERSONAS.get(str(fid))
+def faction_label(fid: Any, lang: Any, voice: Any = None) -> str:
+    """voice: 그 줄을 말한 사람 (게임이 줄마다 남김). False = 처음 사람, 후임 id, None = 지금 사람 (예전 기록)."""
+    if voice is False:
+        faction = FACTIONS.get(str(fid))
+    elif isinstance(voice, str) and voice in VOICES and str(fid) in FACTIONS:
+        faction = dict(FACTIONS[str(fid)])
+        faction.update(VOICES[voice])
+    else:
+        faction = PERSONAS.get(str(fid))
     if not faction:
         return ""
     local = faction["local"].get(str(lang or "").upper(), "")
@@ -383,7 +390,7 @@ def format_radio(lines: Any, lang: Any, writer: str, with_day: bool = False) -> 
         text = clip(m.get("text"), 220)
         if not text:
             continue
-        who = faction_label(m.get("faction"), lang) or (
+        who = faction_label(m.get("faction"), lang, m.get("voice")) or (
             "everyone on the open channel" if m.get("faction") == "open" else "a radio contact")
         when = clip(m.get("clock"), 5)
         if with_day and as_int(m.get("day")):
@@ -1266,7 +1273,7 @@ RECORD_TEXT = {
     "spill_down": "{who} helped {src}, whom you do not like",
     "rescued": "you sent armed people to back {who} up when they were in danger",
     "specialty": "you used your special skills to help {who}",
-    "ray_supply": "{who} had Ray Mercer bring your people supplies",
+    "ray_supply": "{who} had the West Point farm bring your people supplies",
     "survived": "you came close to the end and barely survived",
     "project_gift": "{who} sent supplies for your big project",
     "project_done": "you finished your big project with the players' help",
@@ -1279,7 +1286,7 @@ TAG_TEXT = {
     "abandoner": "the ones who left you when it mattered",
     "unreliable": "someone who does not keep promises",
     "generous": "generous",
-    "vic_friend": "someone who runs with Vic's crew",
+    "vic_friend": "someone who runs with the Coalfield crew",
 }
 
 
@@ -1378,7 +1385,7 @@ SPECIALTY = {
     "dewey": "come out and repair their vehicle",
     "casey": "scout the area with your radio gear and mark the dangers on their map",
     "ray": "drive a load of supplies over to another survivor group on their behalf",
-    "pike": "pray with them over the radio and calm their fear and nerves",
+    "pike": "comfort them over the radio (a prayer, or simply a kind voice) and calm their fear and nerves",
     "hunter": "cover them with your rifle from a distance and shoot the dead around them",
     "rats": "make a racket far away to pull the dead off them",
 }

@@ -1446,6 +1446,35 @@ def format_player_state(name: str, state: Any) -> str | None:
     return text + "."
 
 
+# 개인 신뢰 (멀티 개인 모드, 2026-10-09): 이 사람을 얼마나 아는가
+KNOWN_TEXT = {
+    "well": "you know them well; you have dealt with them a lot",
+    "little": "you have dealt with them a little",
+    "new": "you barely know them yet",
+}
+
+
+def format_personal(value: Any, group: int) -> list[str]:
+    """`personal = {name, trust, known}`: 집단 신뢰와 따로, 지금 말하는(또는 일의 대상인) 이 사람에 대한 태도."""
+    p = as_dict(value)
+    if not p:
+        return []
+    name = clip(p.get("name"), NAME_LIMIT) or "this person"
+    trust = max(0, min(100, as_int(p.get("trust"), group)))
+    known = str(p.get("known") or "")
+    lines = [f"The person this call is about: {name}. Your own trust in {name} personally: {trust}/100."]
+    if known in KNOWN_TEXT:
+        lines.append(f"How well you know {name}: {KNOWN_TEXT[known]}.")
+    lines.append(f"Your attitude toward {name} personally: {trust_tone(trust)}")
+    lines.append(
+        f"Two attitudes: the group one is how you feel about the players in general; the personal one decides how warm "
+        f"and open you are with {name} in this call, and it also follows its number only. If you trust the group but "
+        f"barely know {name}, be polite but careful with them. If {name} personally earned more trust than the group, "
+        f"be warmer with them than with the group, even if the group trust is low. If you refuse a trade or hold "
+        f"something back because of trust, put it as not knowing {name} well enough yet.")
+    return lines
+
+
 def build_radio(payload: dict, mcfg: dict) -> LLMRequest:
     fid = str(payload.get("faction", ""))
     faction = PERSONAS.get(fid)
@@ -1459,11 +1488,21 @@ def build_radio(payload: dict, mcfg: dict) -> LLMRequest:
     persona = [
         f"You are: {name}. {faction['who']}",
         f"How you treat strangers at first (only matters before trust is built): {faction['trust']}",
-        f"Current trust in these players: {trust}/100.",
-        f"Your attitude toward them right now: {trust_tone(trust)} This follows the trust number only; do not "
-        "drift warmer or colder than this because of the log, your memories or other people's feelings. Keep "
-        "your own personality; the attitude changes how much warmth and openness you show, not who you are.",
     ]
+    personal = format_personal(payload.get("personal"), trust)
+    if personal:
+        persona.append(f"Current trust in the players as a group: {trust}/100.")
+        persona.append(f"Your attitude toward the players as a group right now: {trust_tone(trust)} This follows the "
+                       "group trust number only; do not drift warmer or colder than this because of the log, your "
+                       "memories or other people's feelings. Keep your own personality; the attitude changes how much "
+                       "warmth and openness you show, not who you are.")
+        persona.extend(personal)
+    else:
+        persona.append(f"Current trust in these players: {trust}/100.")
+        persona.append(f"Your attitude toward them right now: {trust_tone(trust)} This follows the trust number only; "
+                       "do not drift warmer or colder than this because of the log, your memories or other people's "
+                       "feelings. Keep your own personality; the attitude changes how much warmth and openness you "
+                       "show, not who you are.")
     speech = faction.get("speech", {}).get(code)
     if speech:
         persona.append(f"Your speech level in {language_name(code)}: {speech} Use this same speech level in every "

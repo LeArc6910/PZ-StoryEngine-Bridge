@@ -347,7 +347,7 @@ NOTE_TEXT = {
     "specialty2_reinforce": "{who} talked them through bracing their vehicle to plough through the dead",
     "specialty2_artillery": "{who} called in an artillery strike on a spot they marked",
     "specialty2_evac": "{who} sent a helicopter to fly them home",
-    "specialty2_barricade": "{who} had engineers bolt metal sheets over {count} doors and windows at their home",
+    "specialty2_barricade": "{who} had engineers bolt metal sheets over {count} windows at their home",
     "specialty2_heist": "{who} sent the crew to clean out a building they marked",
     "specialty2_camo": "{who} showed them how to smear themselves with zombie guts so the dead would leave them alone",
     "specialty2_suppressor": "{who} rigged suppressors on their guns for a day",

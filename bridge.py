@@ -39,7 +39,7 @@ from modules import ModuleError, build_request  # noqa: E402
 from providers import ProviderError, create_provider  # noqa: E402
 
 PROTOCOL_VERSION = 1
-BRIDGE_VERSION = "0.3.12"
+BRIDGE_VERSION = "0.3.13"
 ID_PATTERN = re.compile(r"^[A-Za-z0-9_\-]{1,80}$")
 
 log = logging.getLogger("bridge")

@@ -386,6 +386,7 @@ HOLIDAY_NAMES = {
     "daeboreum": "Jeongwol Daeboreum (the first full moon of the lunar year)", "dano": "Dano (a Korean early-summer festival)",
     "chuseok": "Chuseok (the Korean harvest festival)", "dongji": "Dongji (the Korean winter solstice)",
     "christmas": "Christmas", "july4": "the Fourth of July", "halloween": "Halloween", "thanksgiving": "Thanksgiving",
+    "councilday": "Council Day (the anniversary of the first county council)",
 }
 
 
@@ -1325,6 +1326,32 @@ def life_state_words(state: Any) -> str:
     return ", ".join(parts)
 
 
+def format_council(info: Any) -> list[str]:
+    """카운티 회의가 끝난 뒤 (Era.lua): 어떻게 끝났는지, 지금 말하는 사람이 교회를 지켰는지."""
+    info = as_dict(info)
+    result = str(info.get("result") or "")
+    if result not in ("formed", "failed"):
+        return []
+    days = as_int(info.get("days"))
+    when = "today" if days <= 0 else ("yesterday" if days == 1 else f"{days} days ago")
+    if result == "formed":
+        line = (f"The first county council met at the March Ridge church {when} and it worked: the people on the "
+                "radio now meet every month")
+    else:
+        line = f"The first county council met at the March Ridge church {when} and broke up in arguments"
+    line += "; the church held against the dead that day." if info.get("held") else "; the church was overrun that day."
+    out = [line]
+    if info.get("era"):
+        out.append("Since then the council keeps the power and the water running, and nobody on the radio is left to "
+                   "starve alone.")
+    if info.get("defender"):
+        who = clip(info.get("name"), NAME_LIMIT) or "The person you are talking to"
+        out.append(f"{who} was one of those who stood at the church that day. People on the radio remember it; you may "
+                   "call them by it (the one who held the church) once in a while, when it fits. Do not bring it up "
+                   "in every message.")
+    return out
+
+
 def format_newcomer(info: Any) -> list[str]:
     """이 NPC 에게 처음 말을 거는 캐릭터 (Legacy.lua): 함께 다니는 사람들, 최근 이 무리에서 죽은 사람."""
     info = as_dict(info)
@@ -1539,6 +1566,7 @@ def build_radio(payload: dict, mcfg: dict) -> LLMRequest:
     persona.extend(format_story_context(payload.get("story")))
     persona.extend(format_life_context(payload.get("life")))
     persona.extend(format_newcomer(payload.get("newcomer")))
+    persona.extend(format_council(payload.get("council")))
     spec = format_specialty(fid, payload.get("specialty"), code)
     if spec:
         persona.append(spec)
@@ -2234,6 +2262,133 @@ def build_letter(payload: dict, mcfg: dict) -> LLMRequest:
     )
 
 
+# ---------------------------------------------------------------- epilogue (카운티 연대기)
+
+EPILOGUE_FATES = {"dead": "is dead", "gone": "left the county"}
+
+
+def epilogue_person(row: dict, code: str) -> tuple[str, str]:
+    """채널 한 줄: (이름, 설명). 후임이 있으면 그 사람의 페르소나로."""
+    fid = str(row.get("fid"))
+    voice = row.get("voice")
+    f = dict(FACTIONS.get(fid) or {})
+    if isinstance(voice, str) and voice in VOICES:
+        f.update(VOICES[voice])
+    local = as_dict(f.get("local")).get(code, "")
+    name = f.get("name") or clip(row.get("name"), NAME_LIMIT) or fid
+    return (f"{name} ({local})" if local else str(name)), str(f.get("who") or "")
+
+
+def build_epilogue(payload: dict, mcfg: dict) -> LLMRequest:
+    """카운티 회의가 끝난 뒤의 에필로그와 헌장 서명 (Era.lua)."""
+    code = str(payload.get("lang") or "EN").upper()
+    result = str(payload.get("result"))
+    if result not in ("formed", "failed"):
+        raise ModuleError("bad_payload")
+    lines = [f"Language: {language_name(code)}", f"Day {as_int(payload.get('day'))} since the outbreak reached the county."]
+    held = bool(payload.get("held"))
+    lines.append("How the council ended: " + ("it worked, and they agreed to meet every month (a county council now "
+                 "exists)." if result == "formed" else "it broke up in arguments; there is no county council."))
+    siege = as_dict(payload.get("siege"))
+    total = as_int(siege.get("total"))
+    stopped = as_int(siege.get("held"))
+    lines.append("The church: " + ("it held" if held else "it was overrun, or nobody stayed to hold it")
+                 + (f" (about {total} of the dead came at it" + (f"; friends on the radio stopped some of them on the "
+                    "roads)" if stopped > 0 else ")") if total > 0 else "") + ".")
+    prep = payload.get("prep")
+    if isinstance(prep, (int, float)):
+        lines.append("Getting ready for it: " + ("the players gathered what the council needed." if prep >= 0.7 else
+                     "the council met half provisioned."))
+    if payload.get("era"):
+        lines.append("Since the council formed, it took over the substation and the water towers: the county has power "
+                     "and running water again, for good.")
+    signers: dict[str, str] = {}
+    lines.append("")
+    lines.append("The people on the radio (their story lines in order; the last is where they stand now):")
+    rows = [as_dict(r) for r in as_list(payload.get("npcs"))[:10]]
+    for row in rows:
+        fid = str(row.get("fid"))
+        if fid not in FACTIONS:
+            continue
+        name, who = epilogue_person(row, code)
+        signers[fid] = name
+        head = f"- {name}. {who}"
+        gone = EPILOGUE_FATES.get(str(row.get("gone")))
+        if gone:
+            head += f" This person {gone}; nobody has taken over the frequency."
+        speech = None
+        voice = row.get("voice")
+        if isinstance(voice, str) and voice in VOICES:
+            speech = as_dict(VOICES[voice].get("speech")).get(code)
+        else:
+            speech = as_dict(FACTIONS[fid].get("speech")).get(code)
+        lines.append(head)
+        if speech and not gone:
+            lines.append(f"  Speech level, always the same: {speech}")
+        for prev in as_list(row.get("prev"))[:3]:
+            prev = as_dict(prev)
+            pv = prev.get("voice")
+            before = VOICES[pv]["name"] if isinstance(pv, str) and pv in VOICES else FACTIONS[fid]["name"]
+            lines.append(f"  Before them on this frequency: {before}, who "
+                         + EPILOGUE_FATES.get(str(prev.get("fate")), "is gone") + ".")
+        lines.append(f"  Trust in the players at the end: {max(0, min(100, as_int(row.get('trust'))))}/100 "
+                     f"({trust_attitude(max(0, min(100, as_int(row.get('trust')))))}).")
+        for text in as_list(row.get("lines"))[:6]:
+            text = clip(text, 400)
+            if text:
+                lines.append(f"  {text}")
+    lines.append("")
+    lines.append("The players:")
+    for p in as_list(payload.get("players"))[:12]:
+        p = as_dict(p)
+        name = clip(p.get("name"), NAME_LIMIT)
+        if not name:
+            continue
+        line = f"- {name}"
+        if p.get("defender"):
+            line += ", who stood at the church that day"
+        close = []
+        for c in as_list(p.get("close"))[:2]:
+            c = as_dict(c)
+            who = signers.get(str(c.get("faction"))) or clip(c.get("name"), NAME_LIMIT)
+            did = clip(c.get("did"), 200)
+            if who:
+                close.append(f"{who}" + (f" ({did})" if did else ""))
+        if close:
+            line += ". Closest on the radio to: " + "; ".join(close)
+        lines.append(line + ".")
+    signing = [fid for fid in (str(s) for s in as_list(payload.get("signers"))) if fid in signers]
+    lines.append("")
+    if signing:
+        lines.append("Signing the charter" + (" (the unfinished draft)" if result != "formed" else "") + ": "
+                     + ", ".join(f"{fid} = {signers[fid]}" for fid in signing))
+    else:
+        lines.append("Signing the charter: nobody. Return an empty \"signatures\" list.")
+    lines.append(f"Write the chronicle now. Speak only {language_name(code)}.")
+    sig_item = {
+        "type": "object",
+        "properties": {"faction": {"type": "string", "enum": signing or ["none"]}, "line": {"type": "string"}},
+        "required": ["faction", "line"],
+        "additionalProperties": False,
+    }
+    schema = {
+        "type": "object",
+        "properties": {"title": {"type": "string"}, "text": {"type": "string"},
+                       "signatures": {"type": "array", "items": sig_item}},
+        "required": ["title", "text", "signatures"],
+        "additionalProperties": False,
+    }
+    return LLMRequest(
+        module="epilogue",
+        model=str(mcfg.get("model", "mock")),
+        system=load_prompt("epilogue"),
+        messages=[{"role": "user", "content": chr(10).join(lines)}],
+        max_tokens=int(mcfg.get("max_tokens", 8000)),
+        effort=mcfg.get("effort"),
+        json_schema=schema,
+    )
+
+
 # ---------------------------------------------------------------- episode (AI 곁가지)
 
 EPISODE_KINDS = {
@@ -2343,6 +2498,7 @@ def build_episode(payload: dict, mcfg: dict) -> LLMRequest:
 
 
 BUILDERS = {
+    "epilogue": build_epilogue,
     "episode": build_episode,
     "debug": build_debug,
     "letter": build_letter,

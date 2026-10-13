@@ -43,6 +43,24 @@ class OutsidersTest(unittest.TestCase):
         self.assertIn("the players chose Doc Adler", text)
         self.assertNotIn("were let in by a council vote", text)     # 자기 자신은 목록에서 뺀다
 
+    def test_an_outsider_on_the_open_channel(self):
+        payload = {
+            "lang": "KO", "day": 340, "clock": "20:10", "players": ["Gerald Kar"], "log": [], "topic": "small talk",
+            "participants": [
+                {"id": "casey", "trust": 60, "relations": [
+                    {"id": "odell", "bond": 0, "note": "an outsider the council took in; you have no quarrel with them"}]},
+                {"id": "odell", "trust": 40, "guest": {"hard": True}, "relations": []},
+            ],
+        }
+        req = build_request("radio_scene", payload, {"model": "m"})
+        text = req.messages[0]["content"]
+        self.assertIn("odell = Captain Odell", text)
+        self.assertIn("An outsider: they and their people arrived after the county formed its council", text)
+        self.assertIn("chose a local over them", text)
+        self.assertIn("about Captain Odell: an outsider the council took in", text)
+        speakers = req.json_schema["properties"]["lines"]["items"]["properties"]["speaker"]["enum"]
+        self.assertIn("odell", speakers)
+
     def test_radio_request_for_an_outsider(self):
         req = build_request("radio", {
             "faction": "abigail", "lang": "KO", "trust": 45, "day": 340, "date": "1994-06-10", "clock": "09:00",

@@ -33,6 +33,29 @@ class PoliticsTest(unittest.TestCase):
         calm = " ".join(format_politics({"bloc": "gun", "lean": {}, "phase": {"kind": "balance"}}))
         self.assertNotIn("run the county council", calm)
 
+    def test_majority_split_and_rule_by_order(self):
+        base = {"bloc": "market", "lean": {}}
+        inside = " ".join(format_politics(dict(base, regime={"coalition": {"blocs": ["field", "market"], "mine": True,
+                                                                          "strained": True}})))
+        self.assertIn("the Fields and the Market vote together as the council's majority, and your camp is part of it", inside)
+        self.assertIn("falling out", inside)
+        outside = " ".join(format_politics({"bloc": "gun", "lean": {},
+                                            "regime": {"coalition": {"blocs": ["field", "market"]}}}))
+        self.assertIn("Your camp is outside it", outside)
+        split = " ".join(format_politics(dict(base, phase={"kind": "split"}, regime={"split": {
+            "mine": ["field", "market"], "other": ["gun"], "hold": "water", "cut": True, "reunion": True}})))
+        self.assertIn("Your half is the Fields and the Market; the other half is the Guns", split)
+        self.assertIn("holds the county's water and has shut it off", split)
+        self.assertIn("back to one table", split)
+        for role, want in (("commander", "You have closed the county council"), ("against", "You will not stand with it"),
+                           ("with", "Your camp stands with it"), ("under", "you trade quietly")):
+            text = " ".join(format_politics({"bloc": "gun", "lean": {}, "phase": {"kind": "martial"},
+                                             "regime": {"martial": {"by": "Colonel Hale", "role": role, "settled": True}}}))
+            self.assertIn(want, text)
+            self.assertIn("stopped calling it an emergency", text)
+        plain = " ".join(format_politics(base))
+        self.assertNotIn("majority", plain)
+
     def test_own_side_and_own_bill(self):
         text = " ".join(format_politics({
             "bloc": "market", "lean": {"market": 30},

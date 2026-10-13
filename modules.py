@@ -1403,6 +1403,58 @@ BLOC_NAMES = {"field": "the Fields (the farms and the church: sharing)",
               "market": "the Market (the traders: free dealing)"}
 
 
+def camp_names(blocs: Any) -> str:
+    return " and ".join(BLOC_NAMES[str(b)].split(" (")[0] for b in as_list(blocs) if str(b) in BLOC_NAMES)
+
+
+def format_regime(bloc: str, info: Any) -> list[str]:
+    """의회의 정치, 그 뒤 (Regime.lua): 다수파, 갈라선 의회, 군정에서 이 사람이 서 있는 자리."""
+    info = as_dict(info)
+    out: list[str] = []
+    co = as_dict(info.get("coalition"))
+    names = camp_names(co.get("blocs"))
+    if names and len(as_list(co.get("blocs"))) == 2:
+        if co.get("mine"):
+            out.append(f"{names} vote together as the council's majority, and your camp is part of it"
+                       + (". Lately the two camps have been falling out; you feel the strain." if co.get("strained") else "."))
+        else:
+            out.append(f"{names} vote together as the council's majority. Your camp is outside it and keeps getting outvoted.")
+    sp = as_dict(info.get("split"))
+    if sp:
+        mine, other = camp_names(sp.get("mine")), camp_names(sp.get("other"))
+        hold = "power" if str(sp.get("hold")) == "power" else "water"
+        line = (f"The county council has broken in two and no longer sits together. Your half is {mine or 'your camp'}; "
+                f"the other half is {other or 'the rest'}. Your half holds the county's {hold}")
+        line += " and has shut it off to those who stand with the other side." if sp.get("cut") else "."
+        line += (" You are bitter about the other half and say so when it comes up; you want the players on your side, "
+                 "and you notice when they do the other half a favour.")
+        if sp.get("reunion"):
+            line += (" The players are trying to bring both halves back to one table by doing a hard job for each side. "
+                     "You are sceptical, but you will sit down again if they do what your side asked.")
+        out.append(line)
+    ma = as_dict(info.get("martial"))
+    if ma:
+        by = clip(ma.get("by"), NAME_LIMIT) or "the commander"
+        role = str(ma.get("role"))
+        if role == "commander":
+            line = ("You have closed the county council and rule by order: no votes, no chair. Every week you give the "
+                    "players an order, a levy or a sweep, and you expect it done. To you this is necessity, not a coup, "
+                    "and you do not apologise for it.")
+        elif role == "against":
+            line = (f"{by} has closed the county council and rules by order. You will not stand with it, and you say so, "
+                    "carefully, to the players.")
+        elif role == "with":
+            line = (f"{by} has closed the county council and rules by order. Your camp stands with it; you think the "
+                    "county needed a firm hand.")
+        else:
+            line = (f"{by} has closed the county council and rules by order. There are no votes any more. You resent it, "
+                    "you speak of it guardedly on the radio, and what you trade with the players you trade quietly.")
+        if ma.get("settled"):
+            line += " It has gone on long enough that people have stopped calling it an emergency."
+        out.append(line)
+    return out
+
+
 def format_politics(info: Any) -> list[str]:
     """의회의 정치 (Politics.lua): 이 사람의 파벌, 플레이어 무리가 어느 쪽에 기울었는지, 걸린 법안과 자기 표, 시행 중인 법안."""
     info = as_dict(info)
@@ -1430,6 +1482,7 @@ def format_politics(info: Any) -> list[str]:
         else:
             out.append(f"{BLOC_NAMES[ruling].split(' (')[0]} run the county council these days and your camp has been "
                        "pushed aside. It wears on you and your people; let it show now and then.")
+    out.extend(format_regime(bloc, info.get("regime")))
     bill = as_dict(info.get("bill"))
     text = clip(bill.get("text"), 300)
     if text:
@@ -2052,6 +2105,15 @@ def build_radio_scene(payload: dict, mcfg: dict) -> LLMRequest:
         local = f["local"].get(code, "")
         name = f"{f['name']} ({local})" if local else f["name"]
         bits = [f"- {fid} = {name}. {f['who']}"]
+        if x.get("guest") is not None:
+            guest = as_dict(x.get("guest"))
+            bits.append("An outsider: they and their people arrived after the county formed its council and were voted "
+                        "in. On the open channel they are a guest among neighbours who have known each other for a "
+                        "year; they speak as one, and they have no farm, stores or old history here.")
+            if guest.get("hard"):
+                bits.append("The players once chose a local over them, and they are cooler for it.")
+            elif guest.get("sided"):
+                bits.append("The players once chose them over a local, and they have not forgotten it.")
         beat = clip(x.get("beat"), 300)
         if beat:
             bits.append(f'Their situation now, in their own words ("you" means them): {beat}')
@@ -2446,8 +2508,25 @@ def build_epilogue2(payload: dict, mcfg: dict) -> LLMRequest:
     if str(phase.get("kind")) == "rule" and str(phase.get("bloc")) in BLOC_NAMES:
         lines.append(f"- Today {BLOC_NAMES[str(phase.get('bloc'))].split(' (')[0]} run the council; the other camps have been "
                      "pushed aside.")
+    elif str(phase.get("kind")) == "split":
+        lines.append("- Today the council is broken in two and does not sit together; one half holds the power and the "
+                     "other the water.")
+    elif str(phase.get("kind")) == "martial":
+        lines.append("- Today there is no council: it was closed in the middle of a crisis and the county is ruled by order.")
     elif phase:
         lines.append("- No camp runs the council alone; it turns on each camp checking the others.")
+    regime = as_dict(pol.get("regime"))
+    if as_int(regime.get("collapses")) > 0:
+        lines.append(f"- The council's majority fell apart {as_int(regime.get('collapses'))} time(s), and the laws it had "
+                     "passed lapsed with it.")
+    if as_int(regime.get("noconfs")) > 0:
+        lines.append(f"- {as_int(regime.get('noconfs'))} chair(s) were voted out by a motion of no confidence.")
+    if as_int(regime.get("reunions")) > 0:
+        lines.append("- The council broke in two and was brought back to one table by the players: a second county "
+                     "council, in the same church.")
+    if clip(regime.get("martial"), NAME_LIMIT):
+        lines.append(f"- {clip(regime.get('martial'), NAME_LIMIT)} closed the council and rules by order"
+                     + (", and the county has grown used to it." if regime.get("settled") else "."))
     chair = as_dict(pol.get("chair"))
     if chair.get("player"):
         lines.append(f"- The chair is held by {clip(chair.get('player'), NAME_LIMIT)}, one of the players, chosen by every "

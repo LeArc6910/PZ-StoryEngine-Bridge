@@ -243,6 +243,8 @@ class Bridge:
                 mcfg = self.cfg["modules"].get("radio")
             if mcfg is None and module == "letter":
                 mcfg = self.cfg["modules"].get("radio")
+            if mcfg is None and module == "judge":
+                mcfg = self.cfg["modules"].get("monologue") or self.cfg["modules"].get("radio")
             if mcfg is None and module == "epilogue":
                 mcfg = self.cfg["modules"].get("journal") or self.cfg["modules"].get("radio")
             if mcfg is None and module == "broadcast":

@@ -25,6 +25,14 @@ class PoliticsTest(unittest.TestCase):
         self.assertIn("you will vote AGAINST it", text)
         self.assertIn("In force by council vote right now: a common kitchen", text)
 
+    def test_one_camp_ruling(self):
+        mine = " ".join(format_politics({"bloc": "field", "lean": {}, "phase": {"kind": "rule", "bloc": "field"}}))
+        self.assertIn("Your camp runs the county council", mine)
+        other = " ".join(format_politics({"bloc": "gun", "lean": {}, "phase": {"kind": "rule", "bloc": "field"}}))
+        self.assertIn("the Fields run the county council these days and your camp has been pushed aside", other)
+        calm = " ".join(format_politics({"bloc": "gun", "lean": {}, "phase": {"kind": "balance"}}))
+        self.assertNotIn("run the county council", calm)
+
     def test_own_side_and_own_bill(self):
         text = " ".join(format_politics({
             "bloc": "market", "lean": {"market": 30},

@@ -851,6 +851,51 @@ FACTIONS = {
         "trust": "Starts at zero. Barely answers strangers. Only deeds earn his respect.",
         "speech": {"KO": "very short, gruff banmal (~다, ~냐, ~해라)."},
     },
+    # 밖에서 온 사람들 (모드 Outsiders.lua, 2026-10-13): 의회의 정치가 열린 뒤 찾아와, 의회가 받아들이면 무전에 들어온다.
+    "hale": {
+        "name": "Colonel Hale",
+        "local": {"KO": "헤일 대령"},
+        "who": "Colonel Marcus Hale, in his fifties, commands what is left of an army convoy: about thirty soldiers and "
+               "their trucks who came down the highway from the north. Disciplined, proud, used to being obeyed. He "
+               "believes the county needs one chain of command and that it should be his. He keeps his word and "
+               "expects others to keep theirs. He can send soldiers to finish a job in someone's place and fly "
+               "people across the county by helicopter.",
+        "trust": "A newcomer here on the council's sufferance. Formal and guarded with people he does not know yet.",
+        "speech": {"KO": "an officer's clipped plain style giving orders (~다, ~하라, ~하도록). Calls the player 귀관. "
+                         "Never 존댓말, never chatty."},
+    },
+    "odell": {
+        "name": "Captain Odell",
+        "local": {"KO": "오델 선장"},
+        "who": "Captain Josiah Odell, sixty, runs three trading barges that tie up along the Ohio. A river man all his "
+               "life: genial, shrewd, always counting. He can get almost anything if the price is right and he takes "
+               "nearly anything in trade. He prints his own river scrip. He likes a bargain, a drink and a story, "
+               "and he never gives anything away.",
+        "trust": "A newcomer here on the council's sufferance. Friendly to everyone the way a trader is.",
+        "speech": {"KO": "an old trader's 하오체 in its colloquial form (~하오, ~이오, ~하쇼, ~합시다, ~구먼). Calls the "
+                         "player 댁. Never plain banmal, never stiff 합쇼체."},
+    },
+    "okafor": {
+        "name": "Dr. Okafor",
+        "local": {"KO": "오카포 박사"},
+        "who": "Dr. Emeka Okafor, mid-forties, a virologist leading a handful of researchers with a field lab in two "
+               "vans. Precise, courteous, single-minded: he believes the infection can be understood and slowed, and "
+               "that this matters more than anyone's comfort. He has a retardant that holds the infection still for "
+               "a week, not a cure. He is honest about what he does not know.",
+        "trust": "A newcomer here on the council's sufferance. Polite and a little distant.",
+        "speech": {"KO": "formal, exact 합쇼체 (~입니다, ~하십시오, ~습니다). Never banmal, never 해요체."},
+    },
+    "abigail": {
+        "name": "Mother Abigail",
+        "local": {"KO": "아비게일 어머니"},
+        "who": "Mother Abigail, in her seventies, leads a walking congregation of pilgrims who have followed her across "
+               "three states. Gentle, tireless, certain. She is not a pastor of any church and speaks of mercy and "
+               "burdens rather than doctrine. People who meet her tend to stay. She never asks for anything for "
+               "herself, only for her people.",
+        "trust": "A newcomer here on the council's sufferance. Warm to everyone, as to a child she has just met.",
+        "speech": {"KO": "an old woman speaking gently down to someone younger (~란다, ~구나, ~하렴, ~하마). Calls the "
+                         "player 얘야. Never 존댓말."},
+    },
 }
 
 
@@ -1375,6 +1420,15 @@ def format_politics(info: Any) -> list[str]:
             out.append(f"The players have been doing a lot for {BLOC_NAMES[best].split(' (')[0]} lately, more than for "
                        "your camp. " + ("You hold it against them a little." if info.get("against") else
                                         "You have noticed."))
+    # 국면 (Politics.judgePhase): 한 파벌의 독주면 그 파벌은 기세가 오르고 나머지는 밀려나 있다
+    phase = as_dict(info.get("phase"))
+    ruling = str(phase.get("bloc") or "")
+    if str(phase.get("kind")) == "rule" and ruling in BLOC_NAMES:
+        if ruling == bloc:
+            out.append("Your camp runs the county council these days, and you carry yourself like it. Do not gloat.")
+        else:
+            out.append(f"{BLOC_NAMES[ruling].split(' (')[0]} run the county council these days and your camp has been "
+                       "pushed aside. It wears on you and your people; let it show now and then.")
     bill = as_dict(info.get("bill"))
     text = clip(bill.get("text"), 300)
     if text:
@@ -1388,6 +1442,50 @@ def format_politics(info: Any) -> list[str]:
     laws = [clip(x, 200) for x in as_list(info.get("laws")) if clip(x, 200)]
     if laws:
         out.append("In force by council vote right now: " + "; ".join(laws[:4]) + ".")
+    return out
+
+
+def format_outsiders(fid: Any, info: Any) -> list[str]:
+    """밖에서 온 사람들 (Outsiders.lua): 누가 와 있는지, 이 사람이 그들을(또는 카운티 사람들이 이 사람을) 어떻게 보는지."""
+    info = as_dict(info)
+    out: list[str] = []
+    me = as_dict(info.get("self"))
+    if me:
+        wary = ", ".join(clip(x, NAME_LIMIT) for x in as_list(me.get("dislike")) if clip(x, NAME_LIMIT))
+        out.append("You are an outsider here: you and your people arrived after the county formed its council, and the "
+                   "council voted to let you stay. You are a guest on other people's ground and you know it."
+                   + (f" Not everyone wanted you: {wary} are wary of you and yours." if wary else ""))
+        rival = clip(me.get("rival"), NAME_LIMIT)
+        if str(me.get("sided")) == "out" and rival:
+            out.append(f"When it came to a choice between you and {rival}, the players chose you. You have not forgotten it.")
+        elif me.get("hard") and rival:
+            out.append(f"When it came to a choice between you and {rival}, the players chose {rival}. You are cooler "
+                       "with them now and harder to please; if they stop coming to you, you will move on, and you "
+                       "let them feel that without threatening.")
+        out.append("You have no farm, no stores and no long project here; do not talk as if you had lived in the "
+                   "county for years, and do not claim to know the other people on the radio well.")
+    for row in as_list(info.get("here")):
+        row = as_dict(row)
+        name = clip(row.get("name"), NAME_LIMIT)
+        if not name or str(row.get("id")) == str(fid):
+            continue
+        who = clip(row.get("who"), 200)
+        line = f"Outsiders in the county: {name} ({who}) were let in by a council vote."
+        if row.get("rival"):
+            line += (" They step on your ground more than anyone's; you do not want them here and you say so when "
+                     "they come up.")
+            if str(row.get("sided")) == "out":
+                line += " The players took their side against you, and it still stings."
+            elif str(row.get("sided")) == "home":
+                line += " The players stood with you against them, and you remember it warmly."
+        elif row.get("disliked"):
+            line += " You are wary of them and would rather they moved on. Each favour the players take from them costs a little of your trust."
+        elif not me:
+            line += " You have nothing against them."
+        out.append(line)
+    pending = clip(info.get("pending"), NAME_LIMIT)
+    if pending and not me:
+        out.append(f"{pending} and their people have asked to stay in the county; the council is about to vote on it.")
     return out
 
 
@@ -1607,6 +1705,7 @@ def build_radio(payload: dict, mcfg: dict) -> LLMRequest:
     persona.extend(format_newcomer(payload.get("newcomer")))
     persona.extend(format_council(payload.get("council")))
     persona.extend(format_politics(payload.get("politics")))
+    persona.extend(format_outsiders(fid, payload.get("outsiders")))
     spec = format_specialty(fid, payload.get("specialty"), code)
     if spec:
         persona.append(spec)
@@ -2537,7 +2636,56 @@ def build_episode(payload: dict, mcfg: dict) -> LLMRequest:
     )
 
 
+# ---------------------------------------------------------------- judge (유도신문 판정)
+
+def local_names(name: str, code: str) -> str:
+    """영어 이름에 그 언어의 이름을 덧붙인다 (플레이어는 자기 언어로 부른다)."""
+    for persona in list(FACTIONS.values()) + list(VOICES.values()):
+        if persona.get("name") == name:
+            local = persona.get("local", {}).get(code)
+            if local and local != name:
+                return f"{name} (also called {local})"
+    return name
+
+
+def build_judge(payload: dict, mcfg: dict) -> LLMRequest:
+    """모드 Inquiry.lua: 덮어 준 범인의 이름을 플레이어가 흘렸는지 none / hint / named 로만 판정한다.
+
+    NPC 대사를 만드는 요청과는 따로 간다 (그쪽에는 범인 이름을 주지 않는다).
+    """
+    code = str(payload.get("lang") or "EN").upper()
+    culprit = clip(payload.get("culprit"), NAME_LIMIT)
+    text = clip(payload.get("text"), 600)
+    if not culprit or not text:
+        raise ModuleError("bad_payload")
+    suspects = [clip(x, NAME_LIMIT) for x in as_list(payload.get("suspects")) if clip(x, NAME_LIMIT)]
+    asker = clip(payload.get("asker"), NAME_LIMIT) or "Someone on the radio"
+    lines = [
+        f"The secret: {local_names(culprit, code)} is the one who took supplies from the council's stores.",
+        "The people who were under suspicion: " + ", ".join(local_names(s, code) for s in suspects) + ".",
+        f"{asker} does not know who it was and has just tried to get the name out of the player.",
+        "The player's reply, verbatim:",
+        text,
+    ]
+    schema = {
+        "type": "object",
+        "properties": {"verdict": {"type": "string", "enum": ["none", "hint", "named"]}},
+        "required": ["verdict"],
+        "additionalProperties": False,
+    }
+    return LLMRequest(
+        module="judge",
+        model=str(mcfg.get("model", "mock")),
+        system=load_prompt("judge"),
+        messages=[{"role": "user", "content": "\n".join(lines)}],
+        max_tokens=int(mcfg.get("max_tokens", 2000)),
+        effort=mcfg.get("effort"),
+        json_schema=schema,
+    )
+
+
 BUILDERS = {
+    "judge": build_judge,
     "epilogue": build_epilogue,
     "episode": build_episode,
     "debug": build_debug,

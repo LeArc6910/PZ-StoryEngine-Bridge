@@ -178,7 +178,7 @@ if __name__ == "__main__":
 class NewFactionsTest(unittest.TestCase):
     def test_all_factions_build(self):
         from modules import FACTIONS
-        self.assertEqual(len(FACTIONS), 8)
+        self.assertEqual(len(FACTIONS), 12)     # 원래 여덟 + 밖에서 온 넷 (Outsiders.lua)
         for fid in FACTIONS:
             req = build_request("radio", {"faction": fid, "lang": "KO", "trust": 10, "history": []}, {})
             self.assertIn(FACTIONS[fid]["name"], req.system)

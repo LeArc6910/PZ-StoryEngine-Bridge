@@ -1352,6 +1352,45 @@ def format_council(info: Any) -> list[str]:
     return out
 
 
+BLOC_NAMES = {"field": "the Fields (the farms and the church: sharing)",
+              "gun": "the Guns (the soldiers and the hunters: order)",
+              "market": "the Market (the traders: free dealing)"}
+
+
+def format_politics(info: Any) -> list[str]:
+    """의회의 정치 (Politics.lua): 이 사람의 파벌, 플레이어 무리가 어느 쪽에 기울었는지, 걸린 법안과 자기 표, 시행 중인 법안."""
+    info = as_dict(info)
+    bloc = str(info.get("bloc") or "")
+    if bloc not in BLOC_NAMES:
+        return []
+    out = [f"County politics: since the council formed, the people on the radio have split into three camps. "
+           f"You stand with {BLOC_NAMES[bloc]}. The other camps are not enemies, but you want your side's way of "
+           "running the county to win, and you say so when it comes up. Do not turn every message into politics."]
+    lean = as_dict(info.get("lean"))
+    best = max(BLOC_NAMES, key=lambda b: as_int(lean.get(b)))
+    if as_int(lean.get(best)) >= 20:
+        if best == bloc:
+            out.append("The players have been doing a lot for your camp lately; you count them as friends of your side.")
+        else:
+            out.append(f"The players have been doing a lot for {BLOC_NAMES[best].split(' (')[0]} lately, more than for "
+                       "your camp. " + ("You hold it against them a little." if info.get("against") else
+                                        "You have noticed."))
+    bill = as_dict(info.get("bill"))
+    text = clip(bill.get("text"), 300)
+    if text:
+        days = as_int(bill.get("days"))
+        when = "today" if days <= 0 else ("tomorrow" if days == 1 else f"in {days} days")
+        mine = " It is your own proposal." if bill.get("mine") else ""
+        vote = "FOR" if str(bill.get("vote")) == "for" else "AGAINST"
+        out.append(f"Before the council right now, to be voted on {when}: {text}{mine} As things stand you will vote "
+                   f"{vote} it; say so if asked, in your own words, and why. The players cannot vote, but they can "
+                   "change minds by earning trust.")
+    laws = [clip(x, 200) for x in as_list(info.get("laws")) if clip(x, 200)]
+    if laws:
+        out.append("In force by council vote right now: " + "; ".join(laws[:4]) + ".")
+    return out
+
+
 def format_newcomer(info: Any) -> list[str]:
     """이 NPC 에게 처음 말을 거는 캐릭터 (Legacy.lua): 함께 다니는 사람들, 최근 이 무리에서 죽은 사람."""
     info = as_dict(info)
@@ -1567,6 +1606,7 @@ def build_radio(payload: dict, mcfg: dict) -> LLMRequest:
     persona.extend(format_life_context(payload.get("life")))
     persona.extend(format_newcomer(payload.get("newcomer")))
     persona.extend(format_council(payload.get("council")))
+    persona.extend(format_politics(payload.get("politics")))
     spec = format_specialty(fid, payload.get("specialty"), code)
     if spec:
         persona.append(spec)

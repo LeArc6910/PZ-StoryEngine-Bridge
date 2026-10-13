@@ -1403,6 +1403,17 @@ BLOC_NAMES = {"field": "the Fields (the farms and the church: sharing)",
               "market": "the Market (the traders: free dealing)"}
 
 
+# 한 파벌이 의회를 끌고 갈 때 카운티가 굳는 모습 (Regime.lua 의 독주의 색)
+RULE_COLOUR = {
+    "field": "Under the Fields the county shares: trade is cheaper and nobody's larder runs low, but a tithe of food is "
+             "collected from everyone each week, and Vic's market has been shut.",
+    "gun": "Under the Guns the county is kept in order: nobody is shaken down any more and the Guard is stronger, but only "
+           "the Guard may sell guns and ammunition, food is requisitioned from the farms, and there is a curfew at night.",
+    "market": "Under the Market everything is for sale: stock is plentiful, anything is taken in payment and the black "
+              "market is open, but giving things away counts for little, and the church and the clinic are withering.",
+}
+
+
 def camp_names(blocs: Any) -> str:
     return " and ".join(BLOC_NAMES[str(b)].split(" (")[0] for b in as_list(blocs) if str(b) in BLOC_NAMES)
 
@@ -1482,6 +1493,7 @@ def format_politics(info: Any) -> list[str]:
         else:
             out.append(f"{BLOC_NAMES[ruling].split(' (')[0]} run the county council these days and your camp has been "
                        "pushed aside. It wears on you and your people; let it show now and then.")
+        out.append(RULE_COLOUR[ruling] + " Mention it only when it fits what is being talked about.")
     out.extend(format_regime(bloc, info.get("regime")))
     bill = as_dict(info.get("bill"))
     text = clip(bill.get("text"), 300)

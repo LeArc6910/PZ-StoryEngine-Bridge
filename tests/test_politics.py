@@ -28,6 +28,11 @@ class PoliticsTest(unittest.TestCase):
     def test_one_camp_ruling(self):
         mine = " ".join(format_politics({"bloc": "field", "lean": {}, "phase": {"kind": "rule", "bloc": "field"}}))
         self.assertIn("Your camp runs the county council", mine)
+        self.assertIn("a tithe of food is collected from everyone each week", mine)
+        guns = " ".join(format_politics({"bloc": "field", "lean": {}, "phase": {"kind": "rule", "bloc": "gun"}}))
+        self.assertIn("there is a curfew at night", guns)
+        market = " ".join(format_politics({"bloc": "field", "lean": {}, "phase": {"kind": "rule", "bloc": "market"}}))
+        self.assertIn("the church and the clinic are withering", market)
         other = " ".join(format_politics({"bloc": "gun", "lean": {}, "phase": {"kind": "rule", "bloc": "field"}}))
         self.assertIn("the Fields run the county council these days and your camp has been pushed aside", other)
         calm = " ".join(format_politics({"bloc": "gun", "lean": {}, "phase": {"kind": "balance"}}))

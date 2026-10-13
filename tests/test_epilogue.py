@@ -34,6 +34,34 @@ def payload(**extra):
 
 
 class EpilogueTest(unittest.TestCase):
+    def test_second_chronicle(self):
+        req = build_request("epilogue", payload(chapter=2, politics={
+            "days": 351, "phase": {"kind": "rule", "bloc": "market"}, "chair": {"fid": "rats", "bloc": "market"},
+            "passedText": ["a county post that brings bought goods straight to people's hands"], "failed": 2,
+            "moved": [{"fid": "doc", "to": "gun"}], "lean": {"market": 30},
+            "camps": {"ray": "field", "guard": "gun"},
+            "outsiders": [{"id": "hale", "state": "expelled"}, {"id": "odell", "state": "here", "sided": "out",
+                                                                  "rival": "Vic"}],
+            "crisesText": ["the winter rationing", "the pirate broadcasts"],
+            "offices": [{"id": "store", "fid": "dewey", "title": "storekeeper"}],
+        }), {"model": "m"})
+        text = req.messages[0]["content"]
+        self.assertIn("One year ago the county council first sat", text)
+        self.assertIn("Today the Market run the council", text)
+        self.assertIn("The chair is held by Vic (빅)", text)
+        self.assertIn("is the county's storekeeper", text)
+        self.assertIn("a county post that brings bought goods", text)
+        self.assertIn("2 proposal(s) were voted down", text)
+        self.assertIn("June Adler (준 애들러) fell out with their own camp and now sits with the Guns", text)
+        self.assertIn("Colonel Hale (헤일 대령) and their people were taken in and later sent away", text)
+        self.assertIn("the players stood with them against Vic", text)
+        self.assertIn("the winter rationing; the pirate broadcasts", text)
+        self.assertIn("Sits with the Fields", text)
+        self.assertIn("Nobody signs anything this time", text)
+        self.assertNotIn("How the council ended", text)
+        self.assertIn("second chronicle", req.system)
+        self.assertEqual(req.json_schema["properties"]["signatures"]["items"]["properties"]["faction"]["enum"], ["none"])
+
     def test_prompt(self):
         req = build_request("epilogue", payload(), {"model": "m"})
         text = req.messages[0]["content"]

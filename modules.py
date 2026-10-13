@@ -1358,6 +1358,7 @@ TAG_TEXT = {
     "unreliable": "someone who does not keep promises",
     "generous": "generous",
     "vic_friend": "someone who runs with the Coalfield crew",
+    "two_faced": "someone who goes back on their word once they have what they wanted",
 }
 
 
@@ -2418,8 +2419,132 @@ def epilogue_person(row: dict, code: str) -> tuple[str, str]:
     return (f"{name} ({local})" if local else str(name)), str(f.get("who") or "")
 
 
+OUTSIDER_STATES = {
+    "here": "were taken in by a council vote and are still in the county",
+    "left": "were taken in, stayed a while and then moved on of their own accord",
+    "expelled": "were taken in and later sent away by a vote of the council",
+    "refused": "asked to stay and were turned away by the council",
+}
+
+
+def build_epilogue2(payload: dict, mcfg: dict) -> LLMRequest:
+    """의회가 선 지 1년 뒤의 두 번째 연대기 (Era.secondChronicle): 그 한 해의 정치가 카운티를 어떻게 바꿨는가."""
+    code = str(payload.get("lang") or "EN").upper()
+    pol = as_dict(payload.get("politics"))
+
+    def who(fid: str) -> str:
+        f = FACTIONS[fid]
+        local = as_dict(f.get("local")).get(code, "")
+        return f"{f['name']} ({local})" if local and local != f["name"] else str(f["name"])
+
+    lines = [f"Language: {language_name(code)}", f"Day {as_int(payload.get('day'))} since the outbreak reached the county.",
+             "One year ago the county council first sat at the March Ridge church. Since then the people on the radio "
+             "settled into three camps: " + "; ".join(BLOC_NAMES[b] for b in ("field", "gun", "market")) + ".",
+             ""]
+    lines.append("How the year of politics went:")
+    phase = as_dict(pol.get("phase"))
+    if str(phase.get("kind")) == "rule" and str(phase.get("bloc")) in BLOC_NAMES:
+        lines.append(f"- Today {BLOC_NAMES[str(phase.get('bloc'))].split(' (')[0]} run the council; the other camps have been "
+                     "pushed aside.")
+    elif phase:
+        lines.append("- No camp runs the council alone; it turns on each camp checking the others.")
+    chair = as_dict(pol.get("chair"))
+    if chair.get("player"):
+        lines.append(f"- The chair is held by {clip(chair.get('player'), NAME_LIMIT)}, one of the players, chosen by every "
+                     "voice on the radio.")
+    elif str(chair.get("fid")) in FACTIONS:
+        lines.append(f"- The chair is held by {who(str(chair.get('fid')))}.")
+    for o in as_list(pol.get("offices"))[:3]:
+        o = as_dict(o)
+        if str(o.get("fid")) in FACTIONS and clip(o.get("title"), 60):
+            lines.append(f"- {who(str(o.get('fid')))} is the county's {clip(o.get('title'), 60)}.")
+    passed = [clip(x, 200) for x in as_list(pol.get("passedText"))[:8] if clip(x, 200)]
+    if passed:
+        lines.append("- The council passed, at one time or another: " + "; ".join(passed) + ".")
+    failed = as_int(pol.get("failed"))
+    if failed > 0:
+        lines.append(f"- {failed} proposal(s) were voted down.")
+    for m in as_list(pol.get("moved"))[:4]:
+        m = as_dict(m)
+        if str(m.get("fid")) in FACTIONS and str(m.get("to")) in BLOC_NAMES:
+            lines.append(f"- {who(str(m.get('fid')))} fell out with their own camp and now sits with "
+                         f"{BLOC_NAMES[str(m.get('to'))].split(' (')[0]}.")
+    for o in as_list(pol.get("outsiders"))[:4]:
+        o = as_dict(o)
+        fid = str(o.get("id"))
+        state = OUTSIDER_STATES.get(str(o.get("state")))
+        if fid in FACTIONS and state:
+            line = f"- Outsiders: {who(fid)} and their people {state}."
+            rival = clip(o.get("rival"), NAME_LIMIT)
+            if str(o.get("sided")) == "out" and rival:
+                line += f" When it came to a choice, the players stood with them against {rival}."
+            elif str(o.get("sided")) == "home" and rival:
+                line += f" When it came to a choice, the players stood with {rival} against them."
+            lines.append(line)
+    crises = [clip(x, 120) for x in as_list(pol.get("crisesText"))[:10] if clip(x, 120)]
+    if crises:
+        lines.append("- What the county went through that year: " + "; ".join(crises) + ".")
+    lean = as_dict(pol.get("lean"))
+    best = max(BLOC_NAMES, key=lambda b: as_int(lean.get(b)))
+    if as_int(lean.get(best)) >= 20:
+        lines.append(f"- The players have leaned toward {BLOC_NAMES[best].split(' (')[0]}.")
+    lines.append("")
+    lines.append("The people on the radio now:")
+    camps = as_dict(pol.get("camps"))
+    for row in [as_dict(r) for r in as_list(payload.get("npcs"))[:10]]:
+        fid = str(row.get("fid"))
+        if fid not in FACTIONS:
+            continue
+        name, who = epilogue_person(row, code)
+        head = f"- {name}. {who}"
+        gone = EPILOGUE_FATES.get(str(row.get("gone")))
+        if gone:
+            head += f" This person {gone}; nobody has taken over the frequency."
+        else:
+            camp = str(camps.get(fid))
+            if camp in BLOC_NAMES:
+                head += f" Sits with {BLOC_NAMES[camp].split(' (')[0]}."
+            trust = max(0, min(100, as_int(row.get("trust"))))
+            head += f" Trust in the players: {trust}/100 ({trust_attitude(trust)})."
+        lines.append(head)
+        last = [clip(x, 400) for x in as_list(row.get("lines"))[-1:] if clip(x, 400)]
+        if last:
+            lines.append(f"  Where their own story stood: {last[0]}")
+    lines.append("")
+    lines.append("The players: " + ", ".join(clip(as_dict(p).get("name"), NAME_LIMIT)
+                                             for p in as_list(payload.get("players"))[:12]
+                                             if clip(as_dict(p).get("name"), NAME_LIMIT)) + ".")
+    lines.append("")
+    lines.append("Nobody signs anything this time. Return an empty \"signatures\" list.")
+    lines.append(f"Write the second chronicle now. Speak only {language_name(code)}.")
+    sig_item = {
+        "type": "object",
+        "properties": {"faction": {"type": "string", "enum": ["none"]}, "line": {"type": "string"}},
+        "required": ["faction", "line"],
+        "additionalProperties": False,
+    }
+    schema = {
+        "type": "object",
+        "properties": {"title": {"type": "string"}, "text": {"type": "string"},
+                       "signatures": {"type": "array", "items": sig_item}},
+        "required": ["title", "text", "signatures"],
+        "additionalProperties": False,
+    }
+    return LLMRequest(
+        module="epilogue",
+        model=str(mcfg.get("model", "mock")),
+        system=load_prompt("epilogue2"),
+        messages=[{"role": "user", "content": "\n".join(lines)}],
+        max_tokens=int(mcfg.get("max_tokens", 16000)),
+        effort=mcfg.get("effort"),
+        json_schema=schema,
+    )
+
+
 def build_epilogue(payload: dict, mcfg: dict) -> LLMRequest:
     """카운티 회의가 끝난 뒤의 에필로그와 헌장 서명 (Era.lua)."""
+    if as_int(payload.get("chapter")) == 2:
+        return build_epilogue2(payload, mcfg)
     code = str(payload.get("lang") or "EN").upper()
     result = str(payload.get("result"))
     if result not in ("formed", "failed"):

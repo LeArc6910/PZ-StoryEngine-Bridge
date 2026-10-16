@@ -2657,6 +2657,11 @@ def build_epilogue(payload: dict, mcfg: dict) -> LLMRequest:
     if payload.get("era"):
         lines.append("Since the council formed, it took over the substation and the water towers: the county has power "
                      "and running water again, for good.")
+    council_day = as_int(payload.get("council_day"))
+    if council_day > 0 and council_day < as_int(payload.get("day")):
+        lines.append(f"When: the council met early, on day {council_day}, long before this chronicle is written; the "
+                     "story lines below kept going after it. Open with the council as the turning point of the year, "
+                     "then follow each person's year to where they stand now, and end on the county as it is today.")
     signers: dict[str, str] = {}
     lines.append("")
     lines.append("The people on the radio (their story lines in order; the last is where they stand now):")

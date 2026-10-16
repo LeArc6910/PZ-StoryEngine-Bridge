@@ -66,6 +66,12 @@ class EpilogueTest(unittest.TestCase):
         self.assertIn("second chronicle", req.system)
         self.assertEqual(req.json_schema["properties"]["signatures"]["items"]["properties"]["faction"]["enum"], ["none"])
 
+    def test_early_council(self):
+        text = build_request("epilogue", payload(council_day=40), {"model": "m"}).messages[0]["content"]
+        self.assertIn("the council met early, on day 40", text)
+        text = build_request("epilogue", payload(), {"model": "m"}).messages[0]["content"]
+        self.assertNotIn("met early", text)
+
     def test_prompt(self):
         req = build_request("epilogue", payload(), {"model": "m"})
         text = req.messages[0]["content"]
